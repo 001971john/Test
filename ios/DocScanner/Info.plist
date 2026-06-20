@@ -53,6 +53,10 @@
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>DocScanner needs camera access to scan documents.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>DocScanner needs photo library access to save scanned documents.</string>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
 </dict>
