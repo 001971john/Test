@@ -6,6 +6,9 @@ on:
     branches:
       - claude/document-capabilities-ZqH7q
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -44,3 +47,18 @@ jobs:
           name: DocScanner-APK
           path: android/app/build/outputs/apk/release/app-release.apk
           retention-days: 30
+
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/release/app-release.apk DocScanner.apk
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: DocScanner v1.0.${{ github.run_number }}
+          body: |
+            Download **DocScanner.apk** below and install it on your Android phone.
+
+            Tap the APK file link to download, then open it on your phone to install.
+          files: DocScanner.apk
+          make_latest: true
