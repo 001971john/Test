@@ -53,8 +53,9 @@ export const ScannerScreen = () => {
         navigation.navigate('OCRResult', { documentId: processedDoc.id });
       }
     } catch (error: any) {
-      if (!error?.message?.includes('cancel')) {
-        Alert.alert('Scan Error', 'Failed to scan document. Please try again.');
+      const message = error?.message ?? String(error);
+      if (!message.toLowerCase().includes('cancel')) {
+        Alert.alert('Scan Error', `Failed to scan document.\n\n${message}`);
       }
     } finally {
       setScanning(false);
@@ -165,8 +166,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.3)',
   },
   typeButtonActive: {
-    backgroundColor: '#007AFF',
-    borderColor: '#007AFF',
+    backgroundColor: '#4F46E5',
+    borderColor: '#4F46E5',
   },
   typeButtonText: {
     color: 'rgba(255,255,255,0.8)',
@@ -207,7 +208,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#EEF1F7',
     paddingHorizontal: 40,
   },
   permissionIcon: { fontSize: 64, marginBottom: 20 },
@@ -219,12 +220,12 @@ const styles = StyleSheet.create({
   },
   permissionText: {
     fontSize: 16,
-    color: '#8E8E93',
+    color: '#6B7280',
     textAlign: 'center',
     marginBottom: 24,
   },
   permissionButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#4F46E5',
     paddingHorizontal: 32,
     paddingVertical: 14,
     borderRadius: 12,

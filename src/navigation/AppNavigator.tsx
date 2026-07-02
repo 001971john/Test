@@ -1,4 +1,5 @@
 import React from 'react';
+import { Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -13,33 +14,43 @@ import { ExportScreen } from '../screens/ExportScreen';
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
+const TabIcon = ({ icon, focused }: { icon: string; focused: boolean }) => (
+  <Text style={{ fontSize: 24, opacity: focused ? 1 : 0.45 }}>{icon}</Text>
+);
+
 const MainTabs = () => {
   return (
     <Tab.Navigator
       screenOptions={{
-        tabBarActiveTintColor: '#007AFF',
-        tabBarInactiveTintColor: '#8E8E93',
+        tabBarActiveTintColor: '#4F46E5',
+        tabBarInactiveTintColor: '#9CA3AF',
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '600',
+        },
         tabBarStyle: {
           backgroundColor: '#FFFFFF',
-          borderTopColor: '#E5E5EA',
+          borderTopColor: '#E7EAF0',
           height: 85,
           paddingBottom: 25,
           paddingTop: 10,
         },
         headerStyle: {
-          backgroundColor: '#007AFF',
+          backgroundColor: '#4F46E5',
         },
         headerTintColor: '#FFFFFF',
         headerTitleStyle: {
           fontWeight: '700',
         },
+        headerShadowVisible: false,
       }}>
       <Tab.Screen
         name="Home"
         component={HomeScreen}
         options={{
-          title: 'Documents',
+          title: 'My Documents',
           tabBarLabel: 'Documents',
+          tabBarIcon: ({ focused }) => <TabIcon icon="📑" focused={focused} />,
         }}
       />
       <Tab.Screen
@@ -48,6 +59,7 @@ const MainTabs = () => {
         options={{
           title: 'Scan',
           tabBarLabel: 'Scan',
+          tabBarIcon: ({ focused }) => <TabIcon icon="📷" focused={focused} />,
           headerShown: false,
         }}
       />
@@ -57,6 +69,7 @@ const MainTabs = () => {
         options={{
           title: 'Settings',
           tabBarLabel: 'Settings',
+          tabBarIcon: ({ focused }) => <TabIcon icon="⚙️" focused={focused} />,
         }}
       />
     </Tab.Navigator>
@@ -68,7 +81,7 @@ export const AppNavigator = () => {
     <NavigationContainer>
       <Stack.Navigator
         screenOptions={{
-          headerStyle: { backgroundColor: '#007AFF' },
+          headerStyle: { backgroundColor: '#4F46E5' },
           headerTintColor: '#FFFFFF',
           headerTitleStyle: { fontWeight: '700' },
         }}>

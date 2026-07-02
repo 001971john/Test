@@ -75,7 +75,7 @@ export const OCRResultScreen = () => {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color="#4F46E5" />
         <Text style={styles.loadingText}>Processing document...</Text>
       </View>
     );
@@ -187,11 +187,11 @@ export const OCRResultScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2F2F7' },
+  container: { flex: 1, backgroundColor: '#EEF1F7' },
   content: { padding: 16 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { marginTop: 12, fontSize: 16, color: '#8E8E93' },
-  errorText: { fontSize: 18, color: '#FF3B30' },
+  loadingText: { marginTop: 12, fontSize: 16, color: '#6B7280' },
+  errorText: { fontSize: 18, color: '#E11D48' },
   titleInput: {
     fontSize: 24,
     fontWeight: '700',
@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
   },
   docType: {
     fontSize: 14,
-    color: '#007AFF',
+    color: '#4F46E5',
     fontWeight: '600',
     marginBottom: 16,
     marginLeft: 4,
@@ -214,19 +214,24 @@ const styles = StyleSheet.create({
     height: 130,
     borderRadius: 8,
     marginRight: 12,
-    backgroundColor: '#E5E5EA',
+    backgroundColor: '#E7EAF0',
   },
   pageLabel: {
     textAlign: 'center',
     fontSize: 12,
-    color: '#8E8E93',
+    color: '#6B7280',
     marginTop: 4,
   },
   section: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 16,
+    shadowColor: '#3730A3',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
   },
   sectionTitle: {
     fontSize: 18,
@@ -236,19 +241,19 @@ const styles = StyleSheet.create({
   },
   confidenceText: {
     fontSize: 14,
-    color: '#007AFF',
+    color: '#4F46E5',
     marginBottom: 12,
     fontStyle: 'italic',
   },
   fieldRow: { marginBottom: 12 },
   fieldLabel: {
     fontSize: 13,
-    color: '#8E8E93',
+    color: '#6B7280',
     marginBottom: 4,
     fontWeight: '500',
   },
   fieldInput: {
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#EEF1F7',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
@@ -257,7 +262,7 @@ const styles = StyleSheet.create({
   pageHeader: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#007AFF',
+    color: '#4F46E5',
     marginTop: 8,
     marginBottom: 4,
   },
@@ -265,14 +270,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#333',
     lineHeight: 20,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#EEF1F7',
     padding: 12,
     borderRadius: 8,
     marginBottom: 8,
   },
   actions: { marginTop: 8, marginBottom: 40 },
   actionButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#4F46E5',
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -286,12 +291,12 @@ const styles = StyleSheet.create({
   secondaryButton: {
     backgroundColor: '#FFFFFF',
     borderWidth: 2,
-    borderColor: '#007AFF',
+    borderColor: '#4F46E5',
   },
   secondaryButtonText: {
-    color: '#007AFF',
+    color: '#4F46E5',
   },
   exportButton: {
-    backgroundColor: '#34C759',
+    backgroundColor: '#10B981',
   },
 });

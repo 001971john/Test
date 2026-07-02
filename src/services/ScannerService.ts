@@ -1,11 +1,11 @@
-import { v4 as uuidv4 } from 'uuid';
+import { generateId } from '../utils/id';
 import { ScannedDocument, ScannedPage } from '../types';
 import { StorageService } from './StorageService';
 
 const createNewDocument = (type: 'general' | 'id_card' | 'passport' | 'drivers_license' = 'general'): ScannedDocument => {
   const now = new Date().toISOString();
   return {
-    id: uuidv4(),
+    id: generateId(),
     title: `Scan ${new Date().toLocaleDateString()}`,
     createdAt: now,
     updatedAt: now,
@@ -18,7 +18,7 @@ const addPageToDocument = async (
   document: ScannedDocument,
   imageUri: string,
 ): Promise<{ document: ScannedDocument; page: ScannedPage }> => {
-  const pageId = uuidv4();
+  const pageId = generateId();
   const filename = `${document.id}_${pageId}.jpg`;
   const savedUri = await StorageService.saveImage(imageUri, filename);
 

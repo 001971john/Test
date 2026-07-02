@@ -4,7 +4,9 @@ import { IDParser } from '../utils/IDParser';
 import { StorageService } from './StorageService';
 
 const recognizeText = async (imageUri: string): Promise<string> => {
-  const result = await TextRecognition.recognize(imageUri);
+  // ML Kit expects a URI; stored images are raw file paths.
+  const uri = imageUri.startsWith('file://') ? imageUri : `file://${imageUri}`;
+  const result = await TextRecognition.recognize(uri);
   return result.text;
 };
 

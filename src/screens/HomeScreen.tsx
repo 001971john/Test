@@ -37,11 +37,20 @@ export const HomeScreen = () => {
     ]);
   };
 
+  const TYPE_META: Record<string, { label: string; icon: string; color: string }> = {
+    general: { label: 'Document', icon: '📄', color: '#4F46E5' },
+    id_card: { label: 'ID Card', icon: '🪪', color: '#0891B2' },
+    passport: { label: 'Passport', icon: '🛂', color: '#7C3AED' },
+    drivers_license: { label: "Driver's License", icon: '🚗', color: '#D97706' },
+  };
+
   const renderItem = ({ item }: { item: ScannedDocument }) => {
     const thumbnail = item.pages[0]?.processedImageUri;
+    const meta = TYPE_META[item.type] ?? TYPE_META.general;
     return (
       <TouchableOpacity
         style={styles.card}
+        activeOpacity={0.85}
         onPress={() => navigation.navigate('OCRResult', { documentId: item.id })}
         onLongPress={() => handleDelete(item)}>
         <View style={styles.cardContent}>
@@ -49,17 +58,22 @@ export const HomeScreen = () => {
             <Image source={{ uri: `file://${thumbnail}` }} style={styles.thumbnail} />
           ) : (
             <View style={[styles.thumbnail, styles.placeholderThumb]}>
-              <Text style={styles.placeholderText}>No Image</Text>
+              <Text style={styles.placeholderIcon}>{meta.icon}</Text>
             </View>
           )}
           <View style={styles.cardInfo}>
             <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
-            <Text style={styles.cardType}>{item.type.replace(/_/g, ' ').toUpperCase()}</Text>
+            <View style={[styles.typeBadge, { backgroundColor: `${meta.color}18` }]}>
+              <Text style={[styles.typeBadgeText, { color: meta.color }]}>
+                {meta.icon} {meta.label}
+              </Text>
+            </View>
             <Text style={styles.cardDate}>
-              {new Date(item.createdAt).toLocaleDateString()}
+              {new Date(item.createdAt).toLocaleDateString()}  ·  {item.pages.length}{' '}
+              {item.pages.length === 1 ? 'page' : 'pages'}
             </Text>
-            <Text style={styles.cardPages}>{item.pages.length} page(s)</Text>
           </View>
+          <Text style={styles.chevron}>›</Text>
         </View>
       </TouchableOpacity>
     );
@@ -67,9 +81,19 @@ export const HomeScreen = () => {
 
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>
-      <Text style={styles.emptyIcon}>📄</Text>
+      <View style={styles.emptyIconCircle}>
+        <Text style={styles.emptyIcon}>📄</Text>
+      </View>
       <Text style={styles.emptyTitle}>No Documents Yet</Text>
-      <Text style={styles.emptySubtitle}>Tap the Scan tab to capture your first document</Text>
+      <Text style={styles.emptySubtitle}>
+        Scan IDs, passports and papers — extract their text automatically and export to PDF or Word.
+      </Text>
+      <TouchableOpacity
+        style={styles.emptyButton}
+        activeOpacity={0.85}
+        onPress={() => navigation.navigate('Scanner' as never)}>
+        <Text style={styles.emptyButtonText}>📷  Scan Your First Document</Text>
+      </TouchableOpacity>
     </View>
   );
 
@@ -90,43 +114,77 @@ export const HomeScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2F2F7' },
+  container: { flex: 1, backgroundColor: '#EEF1F7' },
   list: { padding: 16 },
   emptyList: { flex: 1 },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    borderRadius: 16,
+    marginBottom: 14,
+    shadowColor: '#3730A3',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
     elevation: 3,
   },
-  cardContent: { flexDirection: 'row', padding: 12 },
+  cardContent: { flexDirection: 'row', padding: 14, alignItems: 'center' },
   thumbnail: {
-    width: 70,
-    height: 90,
-    borderRadius: 8,
-    backgroundColor: '#E5E5EA',
+    width: 68,
+    height: 88,
+    borderRadius: 10,
+    backgroundColor: '#EEF1F7',
   },
   placeholderThumb: {
     justifyContent: 'center',
     alignItems: 'center',
   },
-  placeholderText: { fontSize: 10, color: '#8E8E93' },
-  cardInfo: { flex: 1, marginLeft: 12, justifyContent: 'center' },
-  cardTitle: { fontSize: 17, fontWeight: '600', color: '#000000', marginBottom: 4 },
-  cardType: { fontSize: 12, color: '#007AFF', fontWeight: '500', marginBottom: 2 },
-  cardDate: { fontSize: 13, color: '#8E8E93', marginBottom: 2 },
-  cardPages: { fontSize: 13, color: '#8E8E93' },
+  placeholderIcon: { fontSize: 30 },
+  cardInfo: { flex: 1, marginLeft: 14, justifyContent: 'center' },
+  cardTitle: { fontSize: 17, fontWeight: '700', color: '#111827', marginBottom: 6 },
+  typeBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    marginBottom: 6,
+  },
+  typeBadgeText: { fontSize: 12, fontWeight: '700' },
+  cardDate: { fontSize: 13, color: '#6B7280' },
+  chevron: { fontSize: 28, color: '#C7CBD4', marginLeft: 6, fontWeight: '300' },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 40,
+    paddingHorizontal: 36,
   },
-  emptyIcon: { fontSize: 64, marginBottom: 16 },
-  emptyTitle: { fontSize: 22, fontWeight: '700', color: '#000', marginBottom: 8 },
-  emptySubtitle: { fontSize: 16, color: '#8E8E93', textAlign: 'center' },
+  emptyIconCircle: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: '#E3E7FB',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  emptyIcon: { fontSize: 52 },
+  emptyTitle: { fontSize: 24, fontWeight: '800', color: '#111827', marginBottom: 10 },
+  emptySubtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 23,
+    marginBottom: 28,
+  },
+  emptyButton: {
+    backgroundColor: '#4F46E5',
+    paddingHorizontal: 28,
+    paddingVertical: 16,
+    borderRadius: 30,
+    shadowColor: '#4F46E5',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  emptyButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
 });

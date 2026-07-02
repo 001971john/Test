@@ -70,7 +70,7 @@ export const ImageEditorScreen = () => {
   if (loading || !document) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color="#4F46E5" />
       </View>
     );
   }
@@ -184,13 +184,13 @@ const styles = StyleSheet.create({
     width: 90,
   },
   filterButtonActive: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#4F46E5',
   },
   filterIcon: { fontSize: 28, marginBottom: 4 },
   filterLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 14 },
   filterLabelActive: { color: '#FFFFFF', fontWeight: '600' },
   doneButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#4F46E5',
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',

@@ -12,13 +12,13 @@ const generatePDFHTML = async (doc: ScannedDocument): Promise<string> => {
     <head>
       <style>
         body { font-family: Arial, sans-serif; padding: 20px; }
-        h1 { color: #333; border-bottom: 2px solid #007AFF; padding-bottom: 10px; }
+        h1 { color: #333; border-bottom: 2px solid #4F46E5; padding-bottom: 10px; }
         .page { margin-bottom: 30px; page-break-after: always; }
         .page img { max-width: 100%; border: 1px solid #ddd; border-radius: 4px; }
         .ocr-text { background: #f5f5f5; padding: 15px; border-radius: 8px; margin-top: 10px; white-space: pre-wrap; }
         table { width: 100%; border-collapse: collapse; margin: 20px 0; }
         th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-        th { background-color: #007AFF; color: white; }
+        th { background-color: #4F46E5; color: white; }
         tr:nth-child(even) { background-color: #f9f9f9; }
       </style>
     </head>

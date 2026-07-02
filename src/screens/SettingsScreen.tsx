@@ -79,13 +79,18 @@ export const SettingsScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2F2F7' },
+  container: { flex: 1, backgroundColor: '#EEF1F7' },
   content: { padding: 16 },
   section: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 16,
+    shadowColor: '#3730A3',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
   },
   sectionTitle: {
     fontSize: 18,
@@ -98,10 +103,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E5E5EA',
+    borderBottomColor: '#E7EAF0',
   },
   label: { fontSize: 16, color: '#000' },
-  value: { fontSize: 16, color: '#8E8E93' },
+  value: { fontSize: 16, color: '#6B7280' },
   featureRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -110,7 +115,7 @@ const styles = StyleSheet.create({
   featureIcon: { fontSize: 20, marginRight: 12, width: 30 },
   featureText: { fontSize: 16, color: '#000' },
   dangerButton: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#E11D48',
     padding: 14,
     borderRadius: 10,
     alignItems: 'center',
@@ -118,7 +123,7 @@ const styles = StyleSheet.create({
   dangerButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
   storageNote: {
     fontSize: 13,
-    color: '#8E8E93',
+    color: '#6B7280',
     textAlign: 'center',
     marginTop: 12,
   },

@@ -71,7 +71,7 @@ export const ExportScreen = () => {
   if (!document) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="large" color="#4F46E5" />
       </View>
     );
   }
@@ -139,7 +139,7 @@ export const ExportScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2F2F7', padding: 16 },
+  container: { flex: 1, backgroundColor: '#EEF1F7', padding: 16 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: {
     backgroundColor: '#FFFFFF',
@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   title: { fontSize: 22, fontWeight: '700', color: '#000', marginBottom: 4 },
-  subtitle: { fontSize: 14, color: '#8E8E93' },
+  subtitle: { fontSize: 14, color: '#6B7280' },
   options: { marginBottom: 24 },
   sectionTitle: {
     fontSize: 18,
@@ -163,8 +163,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 12,
   },
-  pdfOption: { backgroundColor: '#FF3B30' },
-  docxOption: { backgroundColor: '#007AFF' },
+  pdfOption: { backgroundColor: '#E11D48' },
+  docxOption: { backgroundColor: '#4F46E5' },
   exportIcon: { fontSize: 36, marginRight: 16 },
   exportInfo: { flex: 1 },
   exportLabel: {
@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
   exportDesc: { fontSize: 14, color: 'rgba(255,255,255,0.8)' },
   shareSection: { marginTop: 8 },
   shareButton: {
-    backgroundColor: '#34C759',
+    backgroundColor: '#10B981',
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',

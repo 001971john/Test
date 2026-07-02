@@ -56,7 +56,9 @@ const deleteDocument = async (id: string): Promise<void> => {
 const saveImage = async (sourceUri: string, filename: string): Promise<string> => {
   const dir = await ensureDir();
   const destPath = `${dir}/${filename}`;
-  await ReactNativeBlobUtil.fs.cp(sourceUri, destPath);
+  // The document scanner returns file:// URIs; blob-util needs raw paths.
+  const sourcePath = sourceUri.replace(/^file:\/\//, '');
+  await ReactNativeBlobUtil.fs.cp(sourcePath, destPath);
   return destPath;
 };
 
