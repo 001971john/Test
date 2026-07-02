@@ -73,7 +73,12 @@ export const HomeScreen = () => {
               {item.pages.length === 1 ? 'page' : 'pages'}
             </Text>
           </View>
-          <Text style={styles.chevron}>›</Text>
+          <TouchableOpacity
+            style={styles.deleteIconButton}
+            onPress={() => handleDelete(item)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Text style={styles.deleteIcon}>🗑</Text>
+          </TouchableOpacity>
         </View>
       </TouchableOpacity>
     );
@@ -150,7 +155,13 @@ const styles = StyleSheet.create({
   },
   typeBadgeText: { fontSize: 12, fontWeight: '700' },
   cardDate: { fontSize: 13, color: '#6B7280' },
-  chevron: { fontSize: 28, color: '#C7CBD4', marginLeft: 6, fontWeight: '300' },
+  deleteIconButton: {
+    marginLeft: 8,
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#FEF2F2',
+  },
+  deleteIcon: { fontSize: 18 },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',

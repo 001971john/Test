@@ -15,6 +15,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList, ScannedDocument, ExtractedIDData } from '../types';
 import { StorageService } from '../services/StorageService';
 import { OCRService } from '../services/OCRService';
+import { ExportService } from '../services/ExportService';
 
 type ScreenRouteProp = RouteProp<RootStackParamList, 'OCRResult'>;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -26,6 +27,7 @@ export const OCRResultScreen = () => {
   const [document, setDocument] = useState<ScannedDocument | null>(null);
   const [loading, setLoading] = useState(true);
   const [editedData, setEditedData] = useState<ExtractedIDData | null>(null);
+  const [savingWord, setSavingWord] = useState(false);
 
   useEffect(() => {
     loadDocument();
@@ -42,16 +44,66 @@ export const OCRResultScreen = () => {
     setLoading(false);
   };
 
-  const handleSave = async () => {
-    if (!document || !editedData) return;
+  const handleKeepOriginal = async () => {
+    if (!document) return;
     const updatedDoc: ScannedDocument = {
       ...document,
-      extractedData: editedData,
+      extractedData: editedData || document.extractedData,
       updatedAt: new Date().toISOString(),
     };
     await StorageService.saveDocument(updatedDoc);
     setDocument(updatedDoc);
-    Alert.alert('Saved', 'Changes have been saved.');
+    Alert.alert('Saved', 'Your scan has been saved as the original.', [
+      { text: 'OK', onPress: () => navigation.navigate('MainTabs' as never) },
+    ]);
+  };
+
+  const handleSaveAsWord = async () => {
+    if (!document) return;
+    setSavingWord(true);
+    try {
+      const updatedDoc: ScannedDocument = {
+        ...document,
+        extractedData: editedData || document.extractedData,
+        updatedAt: new Date().toISOString(),
+      };
+      await StorageService.saveDocument(updatedDoc);
+      const filePath = await ExportService.exportToDOCX(updatedDoc);
+      Alert.alert(
+        'Word Document Ready',
+        'Your scan has been saved as a Word (.docx) document.',
+        [
+          { text: 'OK' },
+          {
+            text: 'Share / Open',
+            onPress: () => ExportService.shareFile(filePath, 'docx'),
+          },
+        ],
+      );
+    } catch (error: any) {
+      Alert.alert('Error', `Could not create Word document.\n\n${error?.message ?? ''}`);
+    } finally {
+      setSavingWord(false);
+    }
+  };
+
+  const handleDeleteScan = () => {
+    if (!document) return;
+    Alert.alert(
+      'Delete Scan',
+      `Delete "${document.title}"? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await StorageService.deleteDocument(document.id);
+            navigation.navigate('MainTabs' as never);
+          },
+        },
+      ],
+    );
   };
 
   const handleRerunOCR = async () => {
@@ -170,16 +222,45 @@ export const OCRResultScreen = () => {
       )}
 
       <View style={styles.actions}>
-        <TouchableOpacity style={styles.actionButton} onPress={handleSave}>
-          <Text style={styles.actionButtonText}>Save Changes</Text>
+        <Text style={styles.actionsTitle}>What would you like to do with this scan?</Text>
+
+        <TouchableOpacity style={styles.actionButton} onPress={handleKeepOriginal}>
+          <Text style={styles.actionButtonText}>✅  Keep Original Scan</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.actionButton, styles.secondaryButton]} onPress={handleRerunOCR}>
-          <Text style={[styles.actionButtonText, styles.secondaryButtonText]}>Re-run OCR</Text>
-        </TouchableOpacity>
+
         <TouchableOpacity
-          style={[styles.actionButton, styles.exportButton]}
+          style={[styles.actionButton, styles.wordButton]}
+          onPress={handleSaveAsWord}
+          disabled={savingWord}>
+          {savingWord ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.actionButtonText}>📘  Save as Word (.docx)</Text>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionButton, styles.secondaryButton]}
           onPress={() => navigation.navigate('Export', { documentId: document.id })}>
-          <Text style={styles.actionButtonText}>Export Document</Text>
+          <Text style={[styles.actionButtonText, styles.secondaryButtonText]}>
+            📄  More Export Options (PDF)
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionButton, styles.secondaryButton]}
+          onPress={handleRerunOCR}>
+          <Text style={[styles.actionButtonText, styles.secondaryButtonText]}>
+            🔁  Re-run Text Recognition
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionButton, styles.deleteButton]}
+          onPress={handleDeleteScan}>
+          <Text style={[styles.actionButtonText, styles.deleteButtonText]}>
+            🗑  Delete This Scan
+          </Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -276,10 +357,17 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   actions: { marginTop: 8, marginBottom: 40 },
+  actionsTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 14,
+    textAlign: 'center',
+  },
   actionButton: {
     backgroundColor: '#4F46E5',
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: 'center',
     marginBottom: 10,
   },
@@ -296,7 +384,16 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     color: '#4F46E5',
   },
-  exportButton: {
-    backgroundColor: '#10B981',
+  wordButton: {
+    backgroundColor: '#2563EB',
+  },
+  deleteButton: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#E11D48',
+    marginTop: 8,
+  },
+  deleteButtonText: {
+    color: '#E11D48',
   },
 });
