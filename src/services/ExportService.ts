@@ -1,4 +1,4 @@
-import RNHTMLtoPDF from 'react-native-html-to-pdf';
+import { generatePDF } from 'react-native-html-to-pdf';
 import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, HeadingLevel, ImageRun } from 'docx';
 import ReactNativeBlobUtil from 'react-native-blob-util';
 import Share from 'react-native-share';
@@ -74,8 +74,8 @@ const exportToPDF = async (doc: ScannedDocument): Promise<string> => {
     fileName: doc.title.replace(/[^a-zA-Z0-9]/g, '_'),
     directory: 'Documents',
   };
-  const file = await RNHTMLtoPDF.convert(options);
-  return file.filePath!;
+  const file = await generatePDF(options);
+  return file.filePath;
 };
 
 const exportToDOCX = async (doc: ScannedDocument): Promise<string> => {

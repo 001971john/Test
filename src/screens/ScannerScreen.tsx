@@ -28,7 +28,7 @@ export const ScannerScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const { hasPermission, requestPermission } = useCameraPermission();
   const device = useCameraDevice('back');
-  const cameraRef = useRef<Camera>(null);
+  const cameraRef = useRef<React.ComponentRef<typeof Camera>>(null);
   const [selectedType, setSelectedType] = useState<DocumentType>('general');
   const [scanning, setScanning] = useState(false);
 
@@ -38,7 +38,6 @@ export const ScannerScreen = () => {
       const result = await DocumentScanner.scanDocument({
         croppedImageQuality: 100,
         maxNumDocuments: 10,
-        letUserAdjustCrop: true,
       });
 
       if (result.scannedImages && result.scannedImages.length > 0) {
@@ -131,7 +130,11 @@ export const ScannerScreen = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     justifyContent: 'space-between',
   },
   topBar: {
