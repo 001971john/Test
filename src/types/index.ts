@@ -15,8 +15,11 @@ export interface ExtractedIDData {
   firstName?: string;
   lastName?: string;
   dateOfBirth?: string;
+  placeOfBirth?: string;
   documentNumber?: string;
+  issueDate?: string;
   expirationDate?: string;
+  issuingAuthority?: string;
   address?: string;
   nationality?: string;
   gender?: string;

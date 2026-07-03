@@ -143,13 +143,16 @@ export const OCRResultScreen = () => {
   const fields: { label: string; key: keyof ExtractedIDData }[] = [
     { label: 'Full Name', key: 'fullName' },
     { label: 'First Name', key: 'firstName' },
-    { label: 'Last Name', key: 'lastName' },
+    { label: 'Last Name / Surname', key: 'lastName' },
     { label: 'Date of Birth', key: 'dateOfBirth' },
-    { label: 'Document Number', key: 'documentNumber' },
+    { label: 'Place of Birth', key: 'placeOfBirth' },
+    { label: 'Document / License No.', key: 'documentNumber' },
+    { label: 'Date of Issue', key: 'issueDate' },
     { label: 'Expiration Date', key: 'expirationDate' },
-    { label: 'Address', key: 'address' },
+    { label: 'Issuing Authority', key: 'issuingAuthority' },
     { label: 'Nationality', key: 'nationality' },
     { label: 'Gender', key: 'gender' },
+    { label: 'Address', key: 'address' },
   ];
 
   return (

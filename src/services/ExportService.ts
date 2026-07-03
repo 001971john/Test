@@ -3,52 +3,84 @@ import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, Width
 import ReactNativeBlobUtil from 'react-native-blob-util';
 import Share from 'react-native-share';
 import { Buffer } from 'buffer';
-import { ScannedDocument } from '../types';
+import { ScannedDocument, ExtractedIDData } from '../types';
 import { StorageService } from './StorageService';
 
+// Shared field order/labels for the ID information form in every export.
+export const ID_FIELD_DEFS: { label: string; key: keyof ExtractedIDData }[] = [
+  { label: 'Full Name', key: 'fullName' },
+  { label: 'First Name', key: 'firstName' },
+  { label: 'Last Name / Surname', key: 'lastName' },
+  { label: 'Date of Birth', key: 'dateOfBirth' },
+  { label: 'Place of Birth', key: 'placeOfBirth' },
+  { label: 'Document / License No.', key: 'documentNumber' },
+  { label: 'Date of Issue', key: 'issueDate' },
+  { label: 'Expiration Date', key: 'expirationDate' },
+  { label: 'Issuing Authority', key: 'issuingAuthority' },
+  { label: 'Nationality', key: 'nationality' },
+  { label: 'Gender', key: 'gender' },
+  { label: 'Address', key: 'address' },
+];
+
+const DOC_TYPE_LABELS: Record<string, string> = {
+  general: 'GENERAL DOCUMENT',
+  id_card: 'IDENTITY CARD',
+  passport: 'PASSPORT',
+  drivers_license: "DRIVER'S LICENSE",
+};
+
 const generatePDFHTML = async (doc: ScannedDocument): Promise<string> => {
+  const typeLabel = DOC_TYPE_LABELS[doc.type] ?? doc.type.toUpperCase();
   let html = `
     <html>
     <head>
       <style>
-        body { font-family: Arial, sans-serif; padding: 20px; }
-        h1 { color: #333; border-bottom: 2px solid #4F46E5; padding-bottom: 10px; }
+        body { font-family: Arial, sans-serif; padding: 24px; color: #111827; }
+        .doc-header { background: #4F46E5; color: #fff; border-radius: 10px; padding: 18px 22px; margin-bottom: 20px; }
+        .doc-header h1 { margin: 0 0 4px 0; font-size: 24px; }
+        .doc-header .meta { font-size: 12px; opacity: 0.85; }
+        .badge { display: inline-block; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); border-radius: 12px; padding: 2px 12px; font-size: 12px; letter-spacing: 1px; margin-bottom: 8px; }
+        .form-card { border: 2px solid #4F46E5; border-radius: 10px; overflow: hidden; margin-bottom: 24px; }
+        .form-title { background: #EEF2FF; color: #3730A3; font-weight: bold; padding: 10px 16px; font-size: 14px; letter-spacing: 1px; border-bottom: 2px solid #4F46E5; }
+        table.form { width: 100%; border-collapse: collapse; }
+        table.form td { border: 1px solid #C7D2FE; padding: 0; width: 50%; vertical-align: top; }
+        .cell { padding: 10px 14px; }
+        .flabel { font-size: 10px; color: #6B7280; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 3px; }
+        .fvalue { font-size: 16px; font-weight: bold; color: #111827; min-height: 18px; }
+        .confidence { font-size: 11px; color: #6B7280; padding: 8px 16px; background: #F9FAFB; border-top: 1px solid #C7D2FE; }
         .page { margin-bottom: 30px; page-break-after: always; }
-        .page img { max-width: 100%; border: 1px solid #ddd; border-radius: 4px; }
-        .ocr-text { background: #f5f5f5; padding: 15px; border-radius: 8px; margin-top: 10px; white-space: pre-wrap; }
-        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-        th { background-color: #4F46E5; color: white; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
+        .page h2 { color: #3730A3; font-size: 16px; }
+        .page img { max-width: 100%; border: 1px solid #ddd; border-radius: 6px; }
+        .ocr-text { background: #f5f5f5; padding: 15px; border-radius: 8px; margin-top: 10px; white-space: pre-wrap; font-size: 12px; }
       </style>
     </head>
     <body>
-      <h1>${doc.title}</h1>
-      <p>Scanned on: ${new Date(doc.createdAt).toLocaleString()}</p>
-      <p>Document type: ${doc.type.replace(/_/g, ' ').toUpperCase()}</p>
+      <div class="doc-header">
+        <div class="badge">${typeLabel}</div>
+        <h1>${doc.title}</h1>
+        <div class="meta">Scanned on ${new Date(doc.createdAt).toLocaleString()} · DocScanner</div>
+      </div>
   `;
 
-  if (doc.extractedData) {
-    html += '<h2>Extracted Information</h2><table>';
+  if (doc.extractedData && doc.type !== 'general') {
     const data = doc.extractedData;
-    const fields: [string, string | undefined][] = [
-      ['Full Name', data.fullName],
-      ['First Name', data.firstName],
-      ['Last Name', data.lastName],
-      ['Date of Birth', data.dateOfBirth],
-      ['Document Number', data.documentNumber],
-      ['Expiration Date', data.expirationDate],
-      ['Address', data.address],
-      ['Nationality', data.nationality],
-      ['Gender', data.gender],
-    ];
-    for (const [label, value] of fields) {
-      if (value) {
-        html += `<tr><th>${label}</th><td>${value}</td></tr>`;
+    const present = ID_FIELD_DEFS.filter(f => data[f.key]);
+    if (present.length > 0) {
+      html += `<div class="form-card"><div class="form-title">${typeLabel} — EXTRACTED INFORMATION</div><table class="form">`;
+      for (let i = 0; i < present.length; i += 2) {
+        const left = present[i];
+        const right = present[i + 1];
+        html += '<tr>';
+        html += `<td><div class="cell"><div class="flabel">${left.label}</div><div class="fvalue">${data[left.key]}</div></div></td>`;
+        html += right
+          ? `<td><div class="cell"><div class="flabel">${right.label}</div><div class="fvalue">${data[right.key]}</div></div></td>`
+          : '<td></td>';
+        html += '</tr>';
       }
+      html += `</table><div class="confidence">Automatic extraction confidence: ${Math.round(
+        data.confidence * 100,
+      )}% — please verify all fields against the original document.</div></div>`;
     }
-    html += `<tr><th>Confidence</th><td>${Math.round(data.confidence * 100)}%</td></tr>`;
-    html += '</table>';
   }
 
   for (let i = 0; i < doc.pages.length; i++) {
@@ -138,74 +170,79 @@ const exportToDOCX = async (doc: ScannedDocument): Promise<ExportResult> => {
     new Paragraph({ text: '' }),
   ];
 
-  if (doc.extractedData) {
+  if (doc.extractedData && doc.type !== 'general') {
+    const typeLabel = DOC_TYPE_LABELS[doc.type] ?? doc.type.toUpperCase();
     children.push(
       new Paragraph({
-        text: 'Extracted Information',
+        text: `${typeLabel} — Extracted Information`,
         heading: HeadingLevel.HEADING_2,
       }),
     );
 
     const data = doc.extractedData;
-    const fields: [string, string | undefined][] = [
-      ['Full Name', data.fullName],
-      ['First Name', data.firstName],
-      ['Last Name', data.lastName],
-      ['Date of Birth', data.dateOfBirth],
-      ['Document Number', data.documentNumber],
-      ['Expiration Date', data.expirationDate],
-      ['Address', data.address],
-      ['Nationality', data.nationality],
-      ['Gender', data.gender],
-    ];
-
-    const rows = fields
-      .filter(([, value]) => value)
-      .map(
-        ([label, value]) =>
-          new TableRow({
-            children: [
-              new TableCell({
-                children: [new Paragraph({ children: [new TextRun({ text: label, bold: true })] })],
-                width: { size: 30, type: WidthType.PERCENTAGE },
-              }),
-              new TableCell({
-                children: [new Paragraph(value!)],
-                width: { size: 70, type: WidthType.PERCENTAGE },
-              }),
-            ],
-          }),
-      );
+    const rows = ID_FIELD_DEFS.filter(f => data[f.key]).map(
+      f =>
+        new TableRow({
+          children: [
+            new TableCell({
+              children: [
+                new Paragraph({
+                  children: [new TextRun({ text: f.label.toUpperCase(), bold: true, size: 18, color: '3730A3' })],
+                }),
+              ],
+              width: { size: 38, type: WidthType.PERCENTAGE },
+              shading: { fill: 'EEF2FF' },
+            }),
+            new TableCell({
+              children: [
+                new Paragraph({
+                  children: [new TextRun({ text: String(data[f.key]), bold: true, size: 24 })],
+                }),
+              ],
+              width: { size: 62, type: WidthType.PERCENTAGE },
+            }),
+          ],
+        }),
+    );
 
     if (rows.length > 0) {
-      children.push(
-        new Table({
-          rows: [
-            new TableRow({
+      rows.push(
+        new TableRow({
+          children: [
+            new TableCell({
               children: [
-                new TableCell({
-                  children: [new Paragraph({ children: [new TextRun({ text: 'Field', bold: true })] })],
-                  width: { size: 30, type: WidthType.PERCENTAGE },
+                new Paragraph({
+                  children: [new TextRun({ text: 'EXTRACTION CONFIDENCE', bold: true, size: 18, color: '3730A3' })],
                 }),
-                new TableCell({
-                  children: [new Paragraph({ children: [new TextRun({ text: 'Value', bold: true })] })],
-                  width: { size: 70, type: WidthType.PERCENTAGE },
+              ],
+              shading: { fill: 'EEF2FF' },
+            }),
+            new TableCell({
+              children: [
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: `${Math.round(data.confidence * 100)}% — verify against the original document`,
+                      size: 20,
+                    }),
+                  ],
                 }),
               ],
             }),
-            ...rows,
           ],
         }),
       );
     }
 
-    children.push(
-      new Paragraph({
-        children: [
-          new TextRun({ text: `Confidence: ${Math.round(data.confidence * 100)}%`, italics: true }),
-        ],
-      }),
-    );
+    if (rows.length > 0) {
+      children.push(
+        new Table({
+          width: { size: 100, type: WidthType.PERCENTAGE },
+          rows,
+        }),
+        new Paragraph({ text: '' }),
+      );
+    }
   }
 
   for (let i = 0; i < doc.pages.length; i++) {
