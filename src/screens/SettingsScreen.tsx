@@ -2,16 +2,24 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LockService } from '../services/LockService';
+import { OCRService, OcrLanguage } from '../services/OCRService';
 
 export const SettingsScreen = () => {
   const [lockEnabled, setLockEnabled] = useState(false);
   const [showPinSetup, setShowPinSetup] = useState(false);
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
+  const [ocrLang, setOcrLang] = useState<OcrLanguage>('greek');
 
   useEffect(() => {
     LockService.isLockEnabled().then(setLockEnabled);
+    OCRService.getOcrLanguage().then(setOcrLang);
   }, []);
+
+  const handleSetOcrLang = async (lang: OcrLanguage) => {
+    setOcrLang(lang);
+    await OCRService.setOcrLanguage(lang);
+  };
 
   const handleSavePin = async () => {
     if (newPin.length < 4) {
@@ -105,6 +113,29 @@ export const SettingsScreen = () => {
           <Text style={styles.featureIcon}>🎨</Text>
           <Text style={styles.featureText}>Image Filters & Enhancement</Text>
         </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Text Recognition Language</Text>
+        <TouchableOpacity
+          style={[styles.langOption, ocrLang === 'greek' && styles.langOptionActive]}
+          onPress={() => handleSetOcrLang('greek')}>
+          <Text style={[styles.langOptionText, ocrLang === 'greek' && styles.langOptionTextActive]}>
+            🇬🇷  Ελληνικά + English
+          </Text>
+          {ocrLang === 'greek' && <Text style={styles.langCheck}>✓</Text>}
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.langOption, ocrLang === 'latin' && styles.langOptionActive]}
+          onPress={() => handleSetOcrLang('latin')}>
+          <Text style={[styles.langOptionText, ocrLang === 'latin' && styles.langOptionTextActive]}>
+            🇬🇧  English only (faster)
+          </Text>
+          {ocrLang === 'latin' && <Text style={styles.langCheck}>✓</Text>}
+        </TouchableOpacity>
+        <Text style={styles.storageNote}>
+          Choose the language of the documents you scan. Greek mode reads both Greek and English text.
+        </Text>
       </View>
 
       <View style={styles.section}>
@@ -218,6 +249,24 @@ const styles = StyleSheet.create({
   featureIcon: { fontSize: 20, marginRight: 12, width: 30 },
   featureText: { fontSize: 16, color: '#000' },
   valueActive: { color: '#10B981', fontWeight: '700' },
+  langOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: '#EEF1F7',
+    marginBottom: 10,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  langOptionActive: {
+    backgroundColor: '#EEF2FF',
+    borderColor: '#4F46E5',
+  },
+  langOptionText: { fontSize: 16, color: '#111827' },
+  langOptionTextActive: { fontWeight: '700', color: '#4F46E5' },
+  langCheck: { fontSize: 18, color: '#4F46E5', fontWeight: '700' },
   primaryButton: {
     backgroundColor: '#4F46E5',
     padding: 14,
