@@ -67,18 +67,58 @@ const generatePDFHTML = async (doc: ScannedDocument): Promise<string> => {
   return html;
 };
 
-const exportToPDF = async (doc: ScannedDocument): Promise<string> => {
+export interface ExportResult {
+  filePath: string;
+  savedToDownloads: boolean;
+  downloadsPath: string;
+}
+
+const MIME_PDF = 'application/pdf';
+const MIME_DOCX =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+/**
+ * Copies an exported file into the phone's public Downloads/DocScanner
+ * folder so the user can find it in their Files app. Never throws —
+ * on older Android versions the copy may fail, but the private export
+ * still succeeds.
+ */
+const saveToDownloads = async (
+  filePath: string,
+  filename: string,
+  mimeType: string,
+): Promise<boolean> => {
+  try {
+    await ReactNativeBlobUtil.MediaCollection.copyToMediaStore(
+      { name: filename, parentFolder: 'DocScanner', mimeType },
+      'Download',
+      filePath,
+    );
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const exportToPDF = async (doc: ScannedDocument): Promise<ExportResult> => {
   const html = await generatePDFHTML(doc);
+  const baseName = doc.title.replace(/[^a-zA-Z0-9]/g, '_');
   const options = {
     html,
-    fileName: doc.title.replace(/[^a-zA-Z0-9]/g, '_'),
+    fileName: baseName,
     directory: 'Documents',
   };
   const file = await generatePDF(options);
-  return file.filePath;
+  const filename = `${baseName}.pdf`;
+  const savedToDownloads = await saveToDownloads(file.filePath, filename, MIME_PDF);
+  return {
+    filePath: file.filePath,
+    savedToDownloads,
+    downloadsPath: `Downloads/DocScanner/${filename}`,
+  };
 };
 
-const exportToDOCX = async (doc: ScannedDocument): Promise<string> => {
+const exportToDOCX = async (doc: ScannedDocument): Promise<ExportResult> => {
   const sections: any[] = [];
   const children: any[] = [
     new Paragraph({
@@ -211,9 +251,15 @@ const exportToDOCX = async (doc: ScannedDocument): Promise<string> => {
 
   const buffer = await Packer.toBuffer(docx);
   const dir = await StorageService.ensureDir();
-  const filePath = `${dir}/${doc.title.replace(/[^a-zA-Z0-9]/g, '_')}.docx`;
+  const filename = `${doc.title.replace(/[^a-zA-Z0-9]/g, '_')}.docx`;
+  const filePath = `${dir}/${filename}`;
   await ReactNativeBlobUtil.fs.writeFile(filePath, Buffer.from(buffer).toString('base64'), 'base64');
-  return filePath;
+  const savedToDownloads = await saveToDownloads(filePath, filename, MIME_DOCX);
+  return {
+    filePath,
+    savedToDownloads,
+    downloadsPath: `Downloads/DocScanner/${filename}`,
+  };
 };
 
 const shareFile = async (filePath: string, type: 'pdf' | 'docx'): Promise<void> => {

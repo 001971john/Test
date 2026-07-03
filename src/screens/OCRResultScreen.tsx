@@ -68,18 +68,17 @@ export const OCRResultScreen = () => {
         updatedAt: new Date().toISOString(),
       };
       await StorageService.saveDocument(updatedDoc);
-      const filePath = await ExportService.exportToDOCX(updatedDoc);
-      Alert.alert(
-        'Word Document Ready',
-        'Your scan has been saved as a Word (.docx) document.',
-        [
-          { text: 'OK' },
-          {
-            text: 'Share / Open',
-            onPress: () => ExportService.shareFile(filePath, 'docx'),
-          },
-        ],
-      );
+      const result = await ExportService.exportToDOCX(updatedDoc);
+      const location = result.savedToDownloads
+        ? `Saved to:\n📁 ${result.downloadsPath}\n\nOpen your Files app → Downloads → DocScanner to find it.`
+        : 'Saved inside the app. Use Share to send it anywhere.';
+      Alert.alert('Word Document Ready', location, [
+        { text: 'OK' },
+        {
+          text: 'Share / Open',
+          onPress: () => ExportService.shareFile(result.filePath, 'docx'),
+        },
+      ]);
     } catch (error: any) {
       Alert.alert('Error', `Could not create Word document.\n\n${error?.message ?? ''}`);
     } finally {

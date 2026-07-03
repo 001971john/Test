@@ -35,24 +35,21 @@ export const ExportScreen = () => {
     if (!document) return;
     setExporting(format);
     try {
-      let filePath: string;
-      if (format === 'pdf') {
-        filePath = await ExportService.exportToPDF(document);
-      } else {
-        filePath = await ExportService.exportToDOCX(document);
-      }
-      setLastExportPath(filePath);
-      Alert.alert(
-        'Export Successful',
-        `Document exported as ${format.toUpperCase()}`,
-        [
-          { text: 'OK' },
-          {
-            text: 'Share',
-            onPress: () => ExportService.shareFile(filePath, format),
-          },
-        ],
-      );
+      const result =
+        format === 'pdf'
+          ? await ExportService.exportToPDF(document)
+          : await ExportService.exportToDOCX(document);
+      setLastExportPath(result.filePath);
+      const location = result.savedToDownloads
+        ? `Saved to:\n📁 ${result.downloadsPath}\n\nOpen your Files app → Downloads → DocScanner to find it.`
+        : 'Saved inside the app. Use the Share button to send it anywhere.';
+      Alert.alert(`${format.toUpperCase()} Ready`, location, [
+        { text: 'OK' },
+        {
+          text: 'Share',
+          onPress: () => ExportService.shareFile(result.filePath, format),
+        },
+      ]);
     } catch (error) {
       Alert.alert('Export Failed', `Could not export as ${format.toUpperCase()}. Please try again.`);
     } finally {
