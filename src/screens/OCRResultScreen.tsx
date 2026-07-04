@@ -16,6 +16,7 @@ import { RootStackParamList, ScannedDocument, ExtractedIDData } from '../types';
 import { StorageService } from '../services/StorageService';
 import { OCRService } from '../services/OCRService';
 import { ExportService } from '../services/ExportService';
+import { LocalAIService, LocalAIError } from '../services/LocalAIService';
 
 type ScreenRouteProp = RouteProp<RootStackParamList, 'OCRResult'>;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -28,6 +29,7 @@ export const OCRResultScreen = () => {
   const [loading, setLoading] = useState(true);
   const [editedData, setEditedData] = useState<ExtractedIDData | null>(null);
   const [savingWord, setSavingWord] = useState(false);
+  const [aiFilling, setAiFilling] = useState(false);
 
   useEffect(() => {
     loadDocument();
@@ -123,6 +125,44 @@ export const OCRResultScreen = () => {
     setEditedData({ ...editedData, [field]: value });
   };
 
+  const handleSmartFill = async () => {
+    if (!document) return;
+    const allText = document.pages.map(p => p.ocrText).join('\n').trim();
+    if (!allText) {
+      Alert.alert('No Text Found', 'Run text recognition first, then try Smart Fill.');
+      return;
+    }
+    if (!(await LocalAIService.isModelDownloaded())) {
+      Alert.alert(
+        'AI Model Not Downloaded',
+        'Smart Fill uses a free AI model that runs entirely on your phone — nothing is sent to the internet. Download it once (about 1.1 GB, Wi-Fi recommended) from Settings.',
+      );
+      return;
+    }
+    setAiFilling(true);
+    try {
+      const extracted = await LocalAIService.extractIDData(allText, document.type);
+      if (Object.keys(extracted).length === 0) {
+        Alert.alert('Nothing Found', 'The AI could not identify any fields in this document.');
+        return;
+      }
+      const base: ExtractedIDData = editedData ?? { confidence: 0 };
+      setEditedData({ ...base, ...extracted, confidence: 0.9 });
+      Alert.alert(
+        'Smart Fill Complete',
+        `The AI filled ${Object.keys(extracted).length} field(s). Please review them, then tap Keep Original Scan to save.`,
+      );
+    } catch (error: any) {
+      const message =
+        error instanceof LocalAIError && error.code === 'MODEL_LOAD_FAILED'
+          ? 'Your phone does not have enough free memory to run the AI right now. Close other apps and try again.'
+          : error?.message ?? 'Smart Fill failed.';
+      Alert.alert('Smart Fill Error', message);
+    } finally {
+      setAiFilling(false);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -195,6 +235,21 @@ export const OCRResultScreen = () => {
           <Text style={styles.confidenceText}>
             Confidence: {Math.round((editedData.confidence || 0) * 100)}%
           </Text>
+          <TouchableOpacity
+            style={styles.aiButton}
+            onPress={handleSmartFill}
+            disabled={aiFilling}>
+            {aiFilling ? (
+              <View style={styles.aiFillingRow}>
+                <ActivityIndicator color="#FFFFFF" size="small" />
+                <Text style={styles.aiButtonText}>
+                  {'  '}AI is reading the document… (~30 s, on your phone)
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.aiButtonText}>✨ Smart Fill with AI (offline)</Text>
+            )}
+          </TouchableOpacity>
           {fields.map(({ label, key }) => (
             <View key={key} style={styles.fieldRow}>
               <Text style={styles.fieldLabel}>{label}</Text>
@@ -328,6 +383,15 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     fontStyle: 'italic',
   },
+  aiButton: {
+    backgroundColor: '#7C3AED',
+    padding: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  aiButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  aiFillingRow: { flexDirection: 'row', alignItems: 'center' },
   fieldRow: { marginBottom: 12 },
   fieldLabel: {
     fontSize: 13,

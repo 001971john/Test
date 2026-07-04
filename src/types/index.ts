@@ -47,5 +47,6 @@ export type RootStackParamList = {
 export type MainTabParamList = {
   Home: undefined;
   Scanner: undefined;
+  Assistant: undefined;
   Settings: undefined;
 };

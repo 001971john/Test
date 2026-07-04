@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LockService } from '../services/LockService';
 import { OCRService, OcrLanguage } from '../services/OCRService';
+import { LocalAIService } from '../services/LocalAIService';
 
 export const SettingsScreen = () => {
   const [lockEnabled, setLockEnabled] = useState(false);
@@ -10,11 +11,55 @@ export const SettingsScreen = () => {
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [ocrLang, setOcrLang] = useState<OcrLanguage>('greek');
+  const [aiStatus, setAiStatus] = useState<'checking' | 'missing' | 'downloading' | 'ready'>('checking');
+  const [aiProgress, setAiProgress] = useState(0);
 
   useEffect(() => {
     LockService.isLockEnabled().then(setLockEnabled);
     OCRService.getOcrLanguage().then(setOcrLang);
+    LocalAIService.isModelDownloaded().then(ready =>
+      setAiStatus(ready ? 'ready' : 'missing'),
+    );
   }, []);
+
+  const handleDownloadModel = () => {
+    Alert.alert(
+      'Download AI Model',
+      'The Smart Fill AI model is about 1.1 GB. Wi-Fi is strongly recommended. After downloading, all AI runs on your phone — no document ever leaves your device.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Download',
+          onPress: async () => {
+            setAiStatus('downloading');
+            setAiProgress(0);
+            try {
+              await LocalAIService.downloadModel(setAiProgress);
+              setAiStatus('ready');
+              Alert.alert('Ready!', 'The AI model is installed. Use ✨ Smart Fill on any scanned document.');
+            } catch (e: any) {
+              setAiStatus('missing');
+              Alert.alert('Download Failed', e?.message ?? 'Please check your connection and try again.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleDeleteModel = () => {
+    Alert.alert('Delete AI Model', 'This frees about 1.1 GB. You can download it again anytime.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          await LocalAIService.deleteModel();
+          setAiStatus('missing');
+        },
+      },
+    ]);
+  };
 
   const handleSetOcrLang = async (lang: OcrLanguage) => {
     setOcrLang(lang);
@@ -135,6 +180,33 @@ export const SettingsScreen = () => {
         </TouchableOpacity>
         <Text style={styles.storageNote}>
           Choose the language of the documents you scan. Greek mode reads both Greek and English text.
+        </Text>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Local AI (Offline)</Text>
+        <View style={styles.row}>
+          <Text style={styles.label}>AI Model</Text>
+          <Text style={[styles.value, aiStatus === 'ready' && styles.valueActive]}>
+            {aiStatus === 'checking' && 'Checking…'}
+            {aiStatus === 'missing' && 'Not downloaded'}
+            {aiStatus === 'downloading' && `Downloading… ${aiProgress}%`}
+            {aiStatus === 'ready' && '✅ Ready · 1.1 GB'}
+          </Text>
+        </View>
+        {aiStatus === 'missing' && (
+          <TouchableOpacity style={styles.primaryButton} onPress={handleDownloadModel}>
+            <Text style={styles.primaryButtonText}>⬇️ Download AI Model (1.1 GB)</Text>
+          </TouchableOpacity>
+        )}
+        {aiStatus === 'ready' && (
+          <TouchableOpacity style={styles.linkButton} onPress={handleDeleteModel}>
+            <Text style={styles.linkButtonText}>Delete AI Model</Text>
+          </TouchableOpacity>
+        )}
+        <Text style={styles.storageNote}>
+          Powers ✨ Smart Fill and the Assistant. Runs 100% on your phone — your documents never
+          leave the device.
         </Text>
       </View>
 

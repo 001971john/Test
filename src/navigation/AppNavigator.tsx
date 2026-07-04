@@ -7,6 +7,7 @@ import { RootStackParamList, MainTabParamList } from '../types';
 import { HomeScreen } from '../screens/HomeScreen';
 import { ScannerScreen } from '../screens/ScannerScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { AssistantScreen } from '../screens/AssistantScreen';
 import { ImageEditorScreen } from '../screens/ImageEditorScreen';
 import { OCRResultScreen } from '../screens/OCRResultScreen';
 import { ExportScreen } from '../screens/ExportScreen';
@@ -61,6 +62,15 @@ const MainTabs = () => {
           tabBarLabel: 'Scan',
           tabBarIcon: ({ focused }) => <TabIcon icon="📷" focused={focused} />,
           headerShown: false,
+        }}
+      />
+      <Tab.Screen
+        name="Assistant"
+        component={AssistantScreen}
+        options={{
+          title: 'Assistant',
+          tabBarLabel: 'Assistant',
+          tabBarIcon: ({ focused }) => <TabIcon icon="🤖" focused={focused} />,
         }}
       />
       <Tab.Screen
