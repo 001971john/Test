@@ -27,6 +27,15 @@ const isModelDownloaded = async (): Promise<boolean> => {
   return Number(stat.size) > MODEL_SIZE_BYTES * 0.95;
 };
 
+const getTempDownloadPath = () =>
+  `${ReactNativeBlobUtil.fs.dirs.LegacyDownloadDir}/DocScanner-model.gguf.part`;
+
+/**
+ * Downloads the model via Android's system Download Manager so the
+ * transfer survives screen-off, app switching, and process death.
+ * The OS shows a progress notification; we also poll the growing file
+ * to drive the in-app percentage.
+ */
 const downloadModel = async (
   onProgress: (percent: number) => void,
 ): Promise<void> => {
@@ -35,24 +44,63 @@ const downloadModel = async (
   if (!dirExists) {
     await ReactNativeBlobUtil.fs.mkdir(dir);
   }
-  const path = getModelPath();
+  const tempPath = getTempDownloadPath();
   try {
-    await ReactNativeBlobUtil.config({ path, overwrite: true })
-      .fetch('GET', MODEL_URL)
-      .progress({ interval: 1000 }, (received, total) => {
-        const totalBytes = Number(total) > 0 ? Number(total) : MODEL_SIZE_BYTES;
-        onProgress(Math.min(99, Math.round((Number(received) / totalBytes) * 100)));
-      });
+    await ReactNativeBlobUtil.fs.unlink(tempPath);
+  } catch {}
+
+  // Poll the partial file's size — DownloadManager doesn't emit
+  // blob-util progress events.
+  const poller = setInterval(async () => {
+    try {
+      const exists = await ReactNativeBlobUtil.fs.exists(tempPath);
+      if (exists) {
+        const stat = await ReactNativeBlobUtil.fs.stat(tempPath);
+        onProgress(
+          Math.min(98, Math.round((Number(stat.size) / MODEL_SIZE_BYTES) * 100)),
+        );
+      }
+    } catch {}
+  }, 2000);
+
+  try {
+    await ReactNativeBlobUtil.config({
+      addAndroidDownloads: {
+        useDownloadManager: true,
+        notification: true,
+        title: 'DocScanner AI model',
+        description: 'Downloading the offline AI model (~1.1 GB)…',
+        mime: 'application/octet-stream',
+        mediaScannable: false,
+        path: tempPath,
+      },
+    }).fetch('GET', MODEL_URL);
+
+    const stat = await ReactNativeBlobUtil.fs.stat(tempPath);
+    if (Number(stat.size) < MODEL_SIZE_BYTES * 0.95) {
+      throw new Error('Downloaded file is incomplete');
+    }
+
+    // Move the finished file into app-internal storage.
+    onProgress(99);
+    const finalPath = getModelPath();
+    try {
+      await ReactNativeBlobUtil.fs.unlink(finalPath);
+    } catch {}
+    await ReactNativeBlobUtil.fs.mv(tempPath, finalPath);
+
     const ok = await isModelDownloaded();
     if (!ok) {
-      throw new Error('Downloaded file is incomplete');
+      throw new Error('Model file failed verification after download');
     }
     onProgress(100);
   } catch (e: any) {
     try {
-      await ReactNativeBlobUtil.fs.unlink(path);
+      await ReactNativeBlobUtil.fs.unlink(tempPath);
     } catch {}
     throw new LocalAIError('DOWNLOAD_FAILED', e?.message ?? 'Download failed');
+  } finally {
+    clearInterval(poller);
   }
 };
 

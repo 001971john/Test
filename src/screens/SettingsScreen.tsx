@@ -25,7 +25,7 @@ export const SettingsScreen = () => {
   const handleDownloadModel = () => {
     Alert.alert(
       'Download AI Model',
-      'The Smart Fill AI model is about 1.1 GB. Wi-Fi is strongly recommended. After downloading, all AI runs on your phone — no document ever leaves your device.',
+      'The Smart Fill AI model is about 1.1 GB. Wi-Fi is strongly recommended. You can lock the screen or use other apps — the download continues in the notification bar. After downloading, all AI runs on your phone — no document ever leaves your device.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
