@@ -45,8 +45,19 @@ const downloadModel = async (
     await ReactNativeBlobUtil.fs.mkdir(dir);
   }
   const tempPath = getTempDownloadPath();
+
+  // If a previous attempt already downloaded the file fully (e.g. only
+  // the finalize step failed), reuse it instead of downloading 1.1 GB again.
+  let haveCompleteTemp = false;
   try {
-    await ReactNativeBlobUtil.fs.unlink(tempPath);
+    if (await ReactNativeBlobUtil.fs.exists(tempPath)) {
+      const existing = await ReactNativeBlobUtil.fs.stat(tempPath);
+      if (Number(existing.size) >= MODEL_SIZE_BYTES * 0.95) {
+        haveCompleteTemp = true;
+      } else {
+        await ReactNativeBlobUtil.fs.unlink(tempPath);
+      }
+    }
   } catch {}
 
   // Poll the partial file's size — DownloadManager doesn't emit
@@ -63,41 +74,58 @@ const downloadModel = async (
     } catch {}
   }, 2000);
 
+  let downloadSucceeded = false;
   try {
-    await ReactNativeBlobUtil.config({
-      addAndroidDownloads: {
-        useDownloadManager: true,
-        notification: true,
-        title: 'DocScanner AI model',
-        description: 'Downloading the offline AI model (~1.1 GB)…',
-        mime: 'application/octet-stream',
-        mediaScannable: false,
-        path: tempPath,
-      },
-    }).fetch('GET', MODEL_URL);
+    if (!haveCompleteTemp) {
+      await ReactNativeBlobUtil.config({
+        addAndroidDownloads: {
+          useDownloadManager: true,
+          notification: true,
+          title: 'DocScanner AI model',
+          description: 'Downloading the offline AI model (~1.1 GB)…',
+          mime: 'application/octet-stream',
+          mediaScannable: false,
+          path: tempPath,
+        },
+      }).fetch('GET', MODEL_URL);
+    }
 
     const stat = await ReactNativeBlobUtil.fs.stat(tempPath);
     if (Number(stat.size) < MODEL_SIZE_BYTES * 0.95) {
       throw new Error('Downloaded file is incomplete');
     }
+    downloadSucceeded = true;
 
-    // Move the finished file into app-internal storage.
+    // Bring the finished file into app-internal storage. `mv` fails
+    // across storage boundaries on many devices ("mv failed for unknown
+    // reasons"), so copy and delete instead.
     onProgress(99);
     const finalPath = getModelPath();
     try {
       await ReactNativeBlobUtil.fs.unlink(finalPath);
     } catch {}
-    await ReactNativeBlobUtil.fs.mv(tempPath, finalPath);
+    try {
+      await ReactNativeBlobUtil.fs.mv(tempPath, finalPath);
+    } catch {
+      await ReactNativeBlobUtil.fs.cp(tempPath, finalPath);
+    }
 
     const ok = await isModelDownloaded();
     if (!ok) {
       throw new Error('Model file failed verification after download');
     }
-    onProgress(100);
-  } catch (e: any) {
     try {
       await ReactNativeBlobUtil.fs.unlink(tempPath);
     } catch {}
+    onProgress(100);
+  } catch (e: any) {
+    // Keep a fully-downloaded temp file so the next attempt can skip
+    // the 1.1 GB download and only redo the finalize step.
+    if (!downloadSucceeded) {
+      try {
+        await ReactNativeBlobUtil.fs.unlink(tempPath);
+      } catch {}
+    }
     throw new LocalAIError('DOWNLOAD_FAILED', e?.message ?? 'Download failed');
   } finally {
     clearInterval(poller);
