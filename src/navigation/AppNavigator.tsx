@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text } from 'react-native';
+import { Text, View, StyleSheet, Pressable } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -18,6 +18,48 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 const TabIcon = ({ icon, focused }: { icon: string; focused: boolean }) => (
   <Text style={{ fontSize: 24, opacity: focused ? 1 : 0.45 }}>{icon}</Text>
 );
+
+// Raised circular camera button — the signature scanner-app center action.
+const ScanTabButton = (props: React.ComponentProps<typeof Pressable>) => (
+  <Pressable {...props} style={fabStyles.wrap}>
+    <View style={fabStyles.button}>
+      <Text style={fabStyles.icon}>📷</Text>
+    </View>
+    <Text style={fabStyles.label}>Scan</Text>
+  </Pressable>
+);
+
+const fabStyles = StyleSheet.create({
+  wrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  button: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#4F46E5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: -30,
+    borderWidth: 4,
+    borderColor: '#FFFFFF',
+    shadowColor: '#4F46E5',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  icon: { fontSize: 28 },
+  label: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#4F46E5',
+    marginTop: 3,
+    marginBottom: 8,
+  },
+});
 
 const MainTabs = () => {
   return (
@@ -52,6 +94,7 @@ const MainTabs = () => {
           title: 'My Documents',
           tabBarLabel: 'Documents',
           tabBarIcon: ({ focused }) => <TabIcon icon="📑" focused={focused} />,
+          headerShown: false,
         }}
       />
       <Tab.Screen
@@ -59,8 +102,7 @@ const MainTabs = () => {
         component={ScannerScreen}
         options={{
           title: 'Scan',
-          tabBarLabel: 'Scan',
-          tabBarIcon: ({ focused }) => <TabIcon icon="📷" focused={focused} />,
+          tabBarButton: props => <ScanTabButton {...(props as object)} />,
           headerShown: false,
         }}
       />
