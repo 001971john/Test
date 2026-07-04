@@ -12,8 +12,11 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import ReactNativeBlobUtil from 'react-native-blob-util';
+import DocumentScanner from 'react-native-document-scanner-plugin';
 import { RootStackParamList, ScannedDocument, ExtractedIDData } from '../types';
 import { StorageService } from '../services/StorageService';
+import { ScannerService } from '../services/ScannerService';
 import { OCRService } from '../services/OCRService';
 import { ExportService } from '../services/ExportService';
 import { LocalAIService, LocalAIError } from '../services/LocalAIService';
@@ -30,6 +33,7 @@ export const OCRResultScreen = () => {
   const [editedData, setEditedData] = useState<ExtractedIDData | null>(null);
   const [savingWord, setSavingWord] = useState(false);
   const [aiFilling, setAiFilling] = useState(false);
+  const [addingPages, setAddingPages] = useState(false);
 
   useEffect(() => {
     loadDocument();
@@ -125,6 +129,86 @@ export const OCRResultScreen = () => {
     setEditedData({ ...editedData, [field]: value });
   };
 
+  const savePages = async (pages: ScannedDocument['pages']) => {
+    if (!document) return;
+    const updatedDoc: ScannedDocument = {
+      ...document,
+      pages: pages.map((p, i) => ({ ...p, order: i })),
+      updatedAt: new Date().toISOString(),
+    };
+    await StorageService.saveDocument(updatedDoc);
+    setDocument(updatedDoc);
+  };
+
+  const movePage = (index: number, direction: -1 | 1) => {
+    if (!document) return;
+    const target = index + direction;
+    if (target < 0 || target >= document.pages.length) return;
+    const pages = [...document.pages];
+    [pages[index], pages[target]] = [pages[target], pages[index]];
+    savePages(pages);
+  };
+
+  const deletePage = (index: number) => {
+    if (!document) return;
+    if (document.pages.length <= 1) {
+      Alert.alert('Cannot Delete', 'A document must keep at least one page. Delete the whole scan instead.');
+      return;
+    }
+    const page = document.pages[index];
+    Alert.alert('Delete Page', `Delete page ${index + 1}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await ReactNativeBlobUtil.fs.unlink(page.originalImageUri);
+            if (page.processedImageUri !== page.originalImageUri) {
+              await ReactNativeBlobUtil.fs.unlink(page.processedImageUri);
+            }
+          } catch {}
+          savePages(document.pages.filter((_, i) => i !== index));
+        },
+      },
+    ]);
+  };
+
+  const addPages = async () => {
+    if (!document || addingPages) return;
+    try {
+      const result = await DocumentScanner.scanDocument({
+        croppedImageQuality: 100,
+        maxNumDocuments: 5,
+      });
+      if (!result.scannedImages || result.scannedImages.length === 0) return;
+      setAddingPages(true);
+      let currentDoc = document;
+      const newPageIds: string[] = [];
+      for (const imageUri of result.scannedImages) {
+        const { document: updated, page } = await ScannerService.addPageToDocument(
+          currentDoc,
+          imageUri,
+        );
+        currentDoc = updated;
+        newPageIds.push(page.id);
+      }
+      setDocument(currentDoc);
+      for (const pid of newPageIds) {
+        currentDoc = await OCRService.processPage(currentDoc, pid);
+      }
+      setDocument(currentDoc);
+      setEditedData(currentDoc.extractedData || null);
+    } catch (error: any) {
+      const message = error?.message ?? '';
+      if (!message.toLowerCase().includes('cancel')) {
+        Alert.alert('Add Page Error', 'Could not add the page. Please try again.');
+      }
+    } finally {
+      setAddingPages(false);
+    }
+  };
+
   const handleSmartFill = async () => {
     if (!document) return;
     const allText = document.pages.map(p => p.ocrText).join('\n').trim();
@@ -211,21 +295,59 @@ export const OCRResultScreen = () => {
       {document.pages.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pagesScroll}>
           {document.pages.map((page, index) => (
-            <TouchableOpacity
-              key={page.id}
-              onPress={() =>
-                navigation.navigate('ImageEditor', {
-                  documentId: document.id,
-                  pageId: page.id,
-                })
-              }>
-              <Image
-                source={{ uri: `file://${page.processedImageUri}` }}
-                style={styles.pageThumb}
-              />
-              <Text style={styles.pageLabel}>Page {index + 1}</Text>
-            </TouchableOpacity>
+            <View key={page.id} style={styles.pageItem}>
+              <TouchableOpacity
+                onPress={() =>
+                  navigation.navigate('ImageEditor', {
+                    documentId: document.id,
+                    pageId: page.id,
+                  })
+                }>
+                <Image
+                  source={{ uri: `file://${page.processedImageUri}` }}
+                  style={styles.pageThumb}
+                />
+                <Text style={styles.pageLabel}>Page {index + 1}</Text>
+              </TouchableOpacity>
+              <View style={styles.pageControls}>
+                <TouchableOpacity
+                  onPress={() => movePage(index, -1)}
+                  disabled={index === 0}
+                  hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}>
+                  <Text style={[styles.pageControl, index === 0 && styles.pageControlDisabled]}>
+                    ◀
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => deletePage(index)}
+                  hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}>
+                  <Text style={styles.pageControlDelete}>🗑</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => movePage(index, 1)}
+                  disabled={index === document.pages.length - 1}
+                  hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}>
+                  <Text
+                    style={[
+                      styles.pageControl,
+                      index === document.pages.length - 1 && styles.pageControlDisabled,
+                    ]}>
+                    ▶
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           ))}
+          <TouchableOpacity style={styles.addPageTile} onPress={addPages} disabled={addingPages}>
+            {addingPages ? (
+              <ActivityIndicator color="#4F46E5" />
+            ) : (
+              <>
+                <Text style={styles.addPageIcon}>➕</Text>
+                <Text style={styles.addPageText}>Add page</Text>
+              </>
+            )}
+          </TouchableOpacity>
         </ScrollView>
       )}
 
@@ -351,7 +473,6 @@ const styles = StyleSheet.create({
     width: 100,
     height: 130,
     borderRadius: 8,
-    marginRight: 12,
     backgroundColor: '#E7EAF0',
   },
   pageLabel: {
@@ -360,6 +481,29 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginTop: 4,
   },
+  pageItem: { marginRight: 12, alignItems: 'center' },
+  pageControls: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: 92,
+    marginTop: 4,
+  },
+  pageControl: { fontSize: 15, color: '#4F46E5', paddingHorizontal: 4 },
+  pageControlDisabled: { color: '#C7CBD4' },
+  pageControlDelete: { fontSize: 14 },
+  addPageTile: {
+    width: 100,
+    height: 130,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#A5B4FC',
+    backgroundColor: '#EEF2FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addPageIcon: { fontSize: 24, marginBottom: 6 },
+  addPageText: { fontSize: 12, fontWeight: '600', color: '#4F46E5' },
   section: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,

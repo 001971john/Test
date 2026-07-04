@@ -1,5 +1,5 @@
 export type DocumentType = 'general' | 'id_card' | 'passport' | 'drivers_license';
-export type FilterType = 'color' | 'grayscale' | 'bw';
+export type FilterType = 'color' | 'enhanced' | 'grayscale' | 'bw';
 
 export interface ScannedPage {
   id: string;

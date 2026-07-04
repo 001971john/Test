@@ -20,16 +20,23 @@ export const ExportScreen = () => {
   const [document, setDocument] = useState<ScannedDocument | null>(null);
   const [exporting, setExporting] = useState<'pdf' | 'docx' | null>(null);
   const [lastExportPath, setLastExportPath] = useState<string | null>(null);
+  const [idCardSheet, setIdCardSheet] = useState(false);
 
   useEffect(() => {
     loadDocument();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadDocument = async () => {
     const docs = await StorageService.getAllDocuments();
     const doc = docs.find(d => d.id === documentId);
     setDocument(doc || null);
+    if (doc && doc.type !== 'general' && doc.pages.length === 2) {
+      setIdCardSheet(true);
+    }
   };
+
+  const idCardSheetAvailable = !!document && document.type !== 'general' && document.pages.length >= 2;
 
   const handleExport = async (format: 'pdf' | 'docx') => {
     if (!document) return;
@@ -37,7 +44,7 @@ export const ExportScreen = () => {
     try {
       const result =
         format === 'pdf'
-          ? await ExportService.exportToPDF(document)
+          ? await ExportService.exportToPDF(document, { idCardSheet: idCardSheetAvailable && idCardSheet })
           : await ExportService.exportToDOCX(document);
       setLastExportPath(result.filePath);
       const location = result.savedToDownloads
@@ -81,6 +88,21 @@ export const ExportScreen = () => {
           {document.pages.length} page(s) | {document.type.replace(/_/g, ' ')}
         </Text>
       </View>
+
+      {idCardSheetAvailable && (
+        <TouchableOpacity
+          style={[styles.idCardToggle, idCardSheet && styles.idCardToggleActive]}
+          onPress={() => setIdCardSheet(v => !v)}>
+          <Text style={styles.idCardToggleIcon}>🪪</Text>
+          <View style={styles.idCardToggleInfo}>
+            <Text style={styles.idCardToggleTitle}>Both sides on one page</Text>
+            <Text style={styles.idCardToggleDesc}>
+              Front and back of the card together on a single A4 sheet (PDF only)
+            </Text>
+          </View>
+          <Text style={styles.idCardToggleCheck}>{idCardSheet ? '✅' : '⬜'}</Text>
+        </TouchableOpacity>
+      )}
 
       <View style={styles.options}>
         <Text style={styles.sectionTitle}>Choose Export Format</Text>
@@ -146,6 +168,25 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 22, fontWeight: '700', color: '#000', marginBottom: 4 },
   subtitle: { fontSize: 14, color: '#6B7280' },
+  idCardToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  idCardToggleActive: {
+    borderColor: '#4F46E5',
+    backgroundColor: '#EEF2FF',
+  },
+  idCardToggleIcon: { fontSize: 26, marginRight: 12 },
+  idCardToggleInfo: { flex: 1 },
+  idCardToggleTitle: { fontSize: 15, fontWeight: '700', color: '#111827' },
+  idCardToggleDesc: { fontSize: 12.5, color: '#6B7280', marginTop: 2 },
+  idCardToggleCheck: { fontSize: 20, marginLeft: 8 },
   options: { marginBottom: 24 },
   sectionTitle: {
     fontSize: 18,

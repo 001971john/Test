@@ -29,7 +29,12 @@ const DOC_TYPE_LABELS: Record<string, string> = {
   drivers_license: "DRIVER'S LICENSE",
 };
 
-const generatePDFHTML = async (doc: ScannedDocument): Promise<string> => {
+export interface PDFOptions {
+  /** Lay the first two pages (front/back of an ID) on one A4 sheet. */
+  idCardSheet?: boolean;
+}
+
+const generatePDFHTML = async (doc: ScannedDocument, options?: PDFOptions): Promise<string> => {
   const typeLabel = DOC_TYPE_LABELS[doc.type] ?? doc.type.toUpperCase();
   let html = `
     <html>
@@ -83,16 +88,35 @@ const generatePDFHTML = async (doc: ScannedDocument): Promise<string> => {
     }
   }
 
-  for (let i = 0; i < doc.pages.length; i++) {
-    const page = doc.pages[i];
-    const base64 = await StorageService.getImageBase64(page.processedImageUri);
+  if (options?.idCardSheet && doc.pages.length >= 2) {
+    // Premium "photocopy" layout: front and back of the card on one sheet.
+    const front = await StorageService.getImageBase64(doc.pages[0].processedImageUri);
+    const back = await StorageService.getImageBase64(doc.pages[1].processedImageUri);
     html += `
-      <div class="page">
-        <h2>Page ${i + 1}</h2>
-        <img src="data:image/jpeg;base64,${base64}" />
-        ${page.ocrText ? `<div class="ocr-text"><h3>Extracted Text</h3><p>${page.ocrText}</p></div>` : ''}
+      <div style="text-align:center;">
+        <div style="display:inline-block; border:1px solid #C7D2FE; border-radius:12px; padding:14px; margin:12px 0;">
+          <div style="font-size:10px; color:#6B7280; letter-spacing:1px; margin-bottom:6px;">FRONT / ΕΜΠΡΟΣ</div>
+          <img src="data:image/jpeg;base64,${front}" style="width:340px; border-radius:6px;" />
+        </div>
+        <br/>
+        <div style="display:inline-block; border:1px solid #C7D2FE; border-radius:12px; padding:14px; margin:6px 0;">
+          <div style="font-size:10px; color:#6B7280; letter-spacing:1px; margin-bottom:6px;">BACK / ΠΙΣΩ</div>
+          <img src="data:image/jpeg;base64,${back}" style="width:340px; border-radius:6px;" />
+        </div>
       </div>
     `;
+  } else {
+    for (let i = 0; i < doc.pages.length; i++) {
+      const page = doc.pages[i];
+      const base64 = await StorageService.getImageBase64(page.processedImageUri);
+      html += `
+        <div class="page">
+          <h2>Page ${i + 1}</h2>
+          <img src="data:image/jpeg;base64,${base64}" />
+          ${page.ocrText ? `<div class="ocr-text"><h3>Extracted Text</h3><p>${page.ocrText}</p></div>` : ''}
+        </div>
+      `;
+    }
   }
 
   html += '</body></html>';
@@ -132,15 +156,14 @@ const saveToDownloads = async (
   }
 };
 
-const exportToPDF = async (doc: ScannedDocument): Promise<ExportResult> => {
-  const html = await generatePDFHTML(doc);
+const exportToPDF = async (doc: ScannedDocument, options?: PDFOptions): Promise<ExportResult> => {
+  const html = await generatePDFHTML(doc, options);
   const baseName = doc.title.replace(/[^a-zA-Z0-9]/g, '_');
-  const options = {
+  const file = await generatePDF({
     html,
     fileName: baseName,
     directory: 'Documents',
-  };
-  const file = await generatePDF(options);
+  });
   const filename = `${baseName}.pdf`;
   const savedToDownloads = await saveToDownloads(file.filePath, filename, MIME_PDF);
   return {

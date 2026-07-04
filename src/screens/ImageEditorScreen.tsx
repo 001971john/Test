@@ -9,7 +9,9 @@ import {
   ActivityIndicator,
   ScrollView,
   Dimensions,
+  NativeModules,
 } from 'react-native';
+import ReactNativeBlobUtil from 'react-native-blob-util';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { RootStackParamList, ScannedDocument, FilterType } from '../types';
 import { StorageService } from '../services/StorageService';
@@ -19,10 +21,17 @@ type ScreenRouteProp = RouteProp<RootStackParamList, 'ImageEditor'>;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const FILTERS: { label: string; value: FilterType; icon: string }[] = [
-  { label: 'Color', value: 'color', icon: '🎨' },
+  { label: 'Original', value: 'color', icon: '🎨' },
+  { label: 'Enhance', value: 'enhanced', icon: '✨' },
   { label: 'Grayscale', value: 'grayscale', icon: '🌑' },
   { label: 'B&W', value: 'bw', icon: '⬛' },
 ];
+
+const NATIVE_MODE: Record<string, string> = {
+  enhanced: 'enhance',
+  grayscale: 'grayscale',
+  bw: 'bw',
+};
 
 export const ImageEditorScreen = () => {
   const route = useRoute<ScreenRouteProp>();
@@ -31,9 +40,12 @@ export const ImageEditorScreen = () => {
   const [document, setDocument] = useState<ScannedDocument | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('color');
   const [loading, setLoading] = useState(true);
+  const [applying, setApplying] = useState(false);
+  const [imageKey, setImageKey] = useState(0);
 
   useEffect(() => {
     loadDocument();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadDocument = async () => {
@@ -50,21 +62,51 @@ export const ImageEditorScreen = () => {
   };
 
   const applyFilter = async (filter: FilterType) => {
-    if (!document) return;
-    setSelectedFilter(filter);
+    if (!document || applying) return;
+    const page = document.pages.find(p => p.id === pageId);
+    if (!page) return;
 
-    const updatedPages = document.pages.map(p =>
-      p.id === pageId ? { ...p, filter } : p,
-    );
+    setApplying(true);
+    try {
+      let newProcessedUri = page.originalImageUri;
 
-    const updatedDoc: ScannedDocument = {
-      ...document,
-      pages: updatedPages,
-      updatedAt: new Date().toISOString(),
-    };
+      if (filter !== 'color') {
+        const dir = await StorageService.ensureDir();
+        newProcessedUri = `${dir}/${document.id}_${pageId}_${filter}.jpg`;
+        await NativeModules.ImageEnhance.enhance(
+          page.originalImageUri,
+          NATIVE_MODE[filter],
+          newProcessedUri,
+        );
+      }
 
-    await StorageService.saveDocument(updatedDoc);
-    setDocument(updatedDoc);
+      // Remove the previous filtered file if it's now unused.
+      if (
+        page.processedImageUri !== page.originalImageUri &&
+        page.processedImageUri !== newProcessedUri
+      ) {
+        try {
+          await ReactNativeBlobUtil.fs.unlink(page.processedImageUri);
+        } catch {}
+      }
+
+      const updatedPages = document.pages.map(p =>
+        p.id === pageId ? { ...p, filter, processedImageUri: newProcessedUri } : p,
+      );
+      const updatedDoc: ScannedDocument = {
+        ...document,
+        pages: updatedPages,
+        updatedAt: new Date().toISOString(),
+      };
+      await StorageService.saveDocument(updatedDoc);
+      setDocument(updatedDoc);
+      setSelectedFilter(filter);
+      setImageKey(k => k + 1); // force the Image to reload the new file
+    } catch (error: any) {
+      Alert.alert('Filter Error', error?.message ?? 'Could not apply the filter.');
+    } finally {
+      setApplying(false);
+    }
   };
 
   if (loading || !document) {
@@ -88,17 +130,16 @@ export const ImageEditorScreen = () => {
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.imageContainer}>
         <Image
-          source={{ uri: `file://${page.processedImageUri}` }}
-          style={[
-            styles.image,
-            selectedFilter === 'grayscale' && { opacity: 0.8 },
-          ]}
+          key={imageKey}
+          source={{ uri: `file://${page.processedImageUri}?v=${imageKey}` }}
+          style={styles.image}
           resizeMode="contain"
         />
-        {selectedFilter !== 'color' && (
-          <Text style={styles.filterBadge}>
-            Filter: {selectedFilter.toUpperCase()} (preview only — native filters applied on export)
-          </Text>
+        {applying && (
+          <View style={styles.applyingOverlay}>
+            <ActivityIndicator size="large" color="#FFFFFF" />
+            <Text style={styles.applyingText}>Applying filter…</Text>
+          </View>
         )}
       </ScrollView>
 
@@ -112,6 +153,7 @@ export const ImageEditorScreen = () => {
                 styles.filterButton,
                 selectedFilter === filter.value && styles.filterButtonActive,
               ]}
+              disabled={applying}
               onPress={() => applyFilter(filter.value)}>
               <Text style={styles.filterIcon}>{filter.icon}</Text>
               <Text
@@ -149,15 +191,18 @@ const styles = StyleSheet.create({
     height: SCREEN_WIDTH * 1.3,
     borderRadius: 8,
   },
-  filterBadge: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    marginTop: 8,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+  applyingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 8,
   },
+  applyingText: { color: '#FFFFFF', marginTop: 12, fontSize: 15, fontWeight: '600' },
   controls: {
     backgroundColor: '#1C1C1E',
     padding: 20,
@@ -181,13 +226,13 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.1)',
-    width: 90,
+    width: 78,
   },
   filterButtonActive: {
     backgroundColor: '#4F46E5',
   },
-  filterIcon: { fontSize: 28, marginBottom: 4 },
-  filterLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 14 },
+  filterIcon: { fontSize: 26, marginBottom: 4 },
+  filterLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 13 },
   filterLabelActive: { color: '#FFFFFF', fontWeight: '600' },
   doneButton: {
     backgroundColor: '#4F46E5',

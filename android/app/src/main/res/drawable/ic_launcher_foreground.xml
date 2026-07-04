@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- White document sheet with folded corner -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M36,26 L62,26 L72,36 L72,82 L36,82 Z" />
+    <!-- Folded corner -->
+    <path
+        android:fillColor="#C7D2FE"
+        android:pathData="M62,26 L72,36 L62,36 Z" />
+    <!-- Text lines -->
+    <path
+        android:fillColor="#A5B4FC"
+        android:pathData="M42,44 L66,44 L66,47 L42,47 Z" />
+    <path
+        android:fillColor="#A5B4FC"
+        android:pathData="M42,52 L66,52 L66,55 L42,55 Z" />
+    <path
+        android:fillColor="#A5B4FC"
+        android:pathData="M42,60 L58,60 L58,63 L42,63 Z" />
+    <!-- Scan line accent -->
+    <path
+        android:fillColor="#22D3EE"
+        android:pathData="M32,68 L76,68 L76,72 L32,72 Z" />
+</vector>
