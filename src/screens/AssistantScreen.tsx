@@ -9,10 +9,10 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useHeaderHeight } from '@react-navigation/elements';
 import { RootStackParamList, ScannedDocument } from '../types';
 import { StorageService } from '../services/StorageService';
 import { ExportService } from '../services/ExportService';
@@ -47,6 +47,7 @@ export const AssistantScreen = () => {
   const [modelReady, setModelReady] = useState<boolean | null>(null);
   const documentsRef = useRef<ScannedDocument[]>([]);
   const listRef = useRef<FlatList<Bubble>>(null);
+  const headerHeight = useHeaderHeight();
 
   useFocusEffect(
     useCallback(() => {
@@ -180,7 +181,8 @@ export const AssistantScreen = () => {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      behavior="padding"
+      keyboardVerticalOffset={headerHeight}>
       <FlatList
         ref={listRef}
         data={bubbles}

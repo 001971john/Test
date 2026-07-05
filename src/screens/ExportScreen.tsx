@@ -21,6 +21,7 @@ export const ExportScreen = () => {
   const [exporting, setExporting] = useState<'pdf' | 'docx' | null>(null);
   const [lastExportPath, setLastExportPath] = useState<string | null>(null);
   const [idCardSheet, setIdCardSheet] = useState(false);
+  const [includeExtras, setIncludeExtras] = useState(false);
 
   useEffect(() => {
     loadDocument();
@@ -45,8 +46,11 @@ export const ExportScreen = () => {
     try {
       const result =
         format === 'pdf'
-          ? await ExportService.exportToPDF(document, { idCardSheet: idCardSheetAvailable && idCardSheet })
-          : await ExportService.exportToDOCX(document);
+          ? await ExportService.exportToPDF(document, {
+              idCardSheet: idCardSheetAvailable && idCardSheet,
+              includeExtras,
+            })
+          : await ExportService.exportToDOCX(document, { includeExtras });
       setLastExportPath(result.filePath);
       const location = result.savedToDownloads
         ? `Saved to:\n📁 ${result.downloadsPath}\n\nOpen your Files app → Downloads → DocScanner to find it.`
@@ -105,6 +109,20 @@ export const ExportScreen = () => {
         </TouchableOpacity>
       )}
 
+      <TouchableOpacity
+        style={[styles.idCardToggle, includeExtras && styles.idCardToggleActive]}
+        onPress={() => setIncludeExtras(v => !v)}>
+        <Text style={styles.idCardToggleIcon}>📝</Text>
+        <View style={styles.idCardToggleInfo}>
+          <Text style={styles.idCardToggleTitle}>Add extracted data & text pages</Text>
+          <Text style={styles.idCardToggleDesc}>
+            Off = a faithful copy of your scan. On = adds extra pages with the recognized text,
+            ID fields and translation.
+          </Text>
+        </View>
+        <Text style={styles.idCardToggleCheck}>{includeExtras ? '✅' : '⬜'}</Text>
+      </TouchableOpacity>
+
       <View style={styles.options}>
         <Text style={styles.sectionTitle}>Choose Export Format</Text>
 
@@ -120,7 +138,7 @@ export const ExportScreen = () => {
               <View style={styles.exportInfo}>
                 <Text style={styles.exportLabel}>PDF Document</Text>
                 <Text style={styles.exportDesc}>
-                  Best for sharing and printing. Includes images and extracted text.
+                  A faithful copy of your scan — same as the original.
                 </Text>
               </View>
             </>
@@ -139,7 +157,7 @@ export const ExportScreen = () => {
               <View style={styles.exportInfo}>
                 <Text style={styles.exportLabel}>Word Document (.docx)</Text>
                 <Text style={styles.exportDesc}>
-                  Editable format with structured data table. Great for ID data extraction.
+                  Your scan as an editable Word file — same as the original.
                 </Text>
               </View>
             </>

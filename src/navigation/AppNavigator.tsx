@@ -67,6 +67,7 @@ const MainTabs = () => {
       screenOptions={{
         tabBarActiveTintColor: '#4F46E5',
         tabBarInactiveTintColor: '#9CA3AF',
+        tabBarHideOnKeyboard: true,
         tabBarLabelStyle: {
           fontSize: 12,
           fontWeight: '600',

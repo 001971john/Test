@@ -37,9 +37,56 @@ const DOC_TYPE_LABELS: Record<string, string> = {
 export interface PDFOptions {
   /** Lay the first two pages (front/back of an ID) on one A4 sheet. */
   idCardSheet?: boolean;
+  /** Append extracted data, OCR text and translation pages. Off by default
+   *  so the PDF is a faithful copy of the scanned document. */
+  includeExtras?: boolean;
 }
 
+/**
+ * Faithful export: only the scanned page images, edge-to-edge, one per
+ * sheet — the PDF looks exactly like the original document.
+ */
+const generateFaithfulPDFHTML = async (
+  doc: ScannedDocument,
+  options?: PDFOptions,
+): Promise<string> => {
+  let body = '';
+  if (options?.idCardSheet && doc.pages.length >= 2) {
+    const front = await StorageService.getImageBase64(doc.pages[0].processedImageUri);
+    const back = await StorageService.getImageBase64(doc.pages[1].processedImageUri);
+    body = `
+      <div class="sheet" style="padding-top:24px;">
+        <img class="card" src="data:image/jpeg;base64,${front}" />
+        <img class="card" src="data:image/jpeg;base64,${back}" />
+      </div>`;
+  } else {
+    for (const page of doc.pages) {
+      const base64 = await StorageService.getImageBase64(page.processedImageUri);
+      body += `<div class="sheet"><img src="data:image/jpeg;base64,${base64}" /></div>`;
+    }
+  }
+  return `
+    <html>
+    <head>
+      <style>
+        @page { margin: 0; }
+        html, body { margin: 0; padding: 0; }
+        .sheet { page-break-after: always; text-align: center; }
+        .sheet img { width: 100%; display: block; }
+        .sheet img.card { width: 82%; margin: 18px auto; border-radius: 6px; }
+      </style>
+    </head>
+    <body>${body}</body>
+    </html>
+  `;
+};
+
 const generatePDFHTML = async (doc: ScannedDocument, options?: PDFOptions): Promise<string> => {
+  // Default: faithful, image-only copy of the scan.
+  if (!options?.includeExtras) {
+    return generateFaithfulPDFHTML(doc, options);
+  }
+
   const typeLabel = DOC_TYPE_LABELS[doc.type] ?? doc.type.toUpperCase();
   let html = `
     <html>
@@ -188,27 +235,29 @@ const exportToPDF = async (doc: ScannedDocument, options?: PDFOptions): Promise<
   };
 };
 
-const exportToDOCX = async (doc: ScannedDocument): Promise<ExportResult> => {
-  const sections: any[] = [];
-  const children: any[] = [
-    new Paragraph({
-      text: doc.title,
-      heading: HeadingLevel.HEADING_1,
-    }),
-    new Paragraph({
-      children: [
-        new TextRun({ text: `Scanned on: ${new Date(doc.createdAt).toLocaleString()}` }),
-      ],
-    }),
-    new Paragraph({
-      children: [
-        new TextRun({ text: `Document type: ${doc.type.replace(/_/g, ' ').toUpperCase()}` }),
-      ],
-    }),
-    new Paragraph({ text: '' }),
-  ];
+const exportToDOCX = async (
+  doc: ScannedDocument,
+  options?: { includeExtras?: boolean },
+): Promise<ExportResult> => {
+  const includeExtras = !!options?.includeExtras;
+  const children: any[] = includeExtras
+    ? [
+        new Paragraph({ text: doc.title, heading: HeadingLevel.HEADING_1 }),
+        new Paragraph({
+          children: [
+            new TextRun({ text: `Scanned on: ${new Date(doc.createdAt).toLocaleString()}` }),
+          ],
+        }),
+        new Paragraph({
+          children: [
+            new TextRun({ text: `Document type: ${doc.type.replace(/_/g, ' ').toUpperCase()}` }),
+          ],
+        }),
+        new Paragraph({ text: '' }),
+      ]
+    : [];
 
-  if (doc.extractedData && ID_TYPES.includes(doc.type)) {
+  if (includeExtras && doc.extractedData && ID_TYPES.includes(doc.type)) {
     const typeLabel = DOC_TYPE_LABELS[doc.type] ?? doc.type.toUpperCase();
     children.push(
       new Paragraph({
@@ -285,13 +334,12 @@ const exportToDOCX = async (doc: ScannedDocument): Promise<ExportResult> => {
 
   for (let i = 0; i < doc.pages.length; i++) {
     const page = doc.pages[i];
-    children.push(
-      new Paragraph({ text: '' }),
-      new Paragraph({
-        text: `Page ${i + 1}`,
-        heading: HeadingLevel.HEADING_2,
-      }),
-    );
+    if (includeExtras) {
+      children.push(
+        new Paragraph({ text: '' }),
+        new Paragraph({ text: `Page ${i + 1}`, heading: HeadingLevel.HEADING_2 }),
+      );
+    }
 
     try {
       const base64 = await StorageService.getImageBase64(page.processedImageUri);
@@ -301,7 +349,8 @@ const exportToDOCX = async (doc: ScannedDocument): Promise<ExportResult> => {
           children: [
             new ImageRun({
               data: imageBuffer,
-              transformation: { width: 500, height: 650 },
+              // Near-full A4 width for a faithful copy of the scan.
+              transformation: { width: 600, height: 780 },
               type: 'jpg',
             }),
           ],
@@ -309,15 +358,21 @@ const exportToDOCX = async (doc: ScannedDocument): Promise<ExportResult> => {
       );
     } catch {}
 
-    if (page.ocrText) {
+    if (includeExtras && page.ocrText) {
       children.push(
-        new Paragraph({
-          text: 'Extracted Text:',
-          heading: HeadingLevel.HEADING_3,
-        }),
+        new Paragraph({ text: 'Extracted Text:', heading: HeadingLevel.HEADING_3 }),
         new Paragraph({ text: page.ocrText }),
       );
     }
+  }
+
+  if (includeExtras && doc.translation) {
+    const langLabel = doc.translation.to === 'greek' ? 'Ελληνικά' : 'English';
+    children.push(
+      new Paragraph({ text: '' }),
+      new Paragraph({ text: `Translation (${langLabel})`, heading: HeadingLevel.HEADING_2 }),
+      new Paragraph({ text: doc.translation.text }),
+    );
   }
 
   const docx = new Document({
