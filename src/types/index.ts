@@ -47,6 +47,8 @@ export interface ScannedDocument {
   pages: ScannedPage[];
   extractedData?: ExtractedIDData;
   type: DocumentType;
+  /** On-demand AI translation of the document text. Original is never modified. */
+  translation?: { to: 'greek' | 'english'; text: string };
 }
 
 export type RootStackParamList = {

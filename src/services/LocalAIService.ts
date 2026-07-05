@@ -373,6 +373,41 @@ const chat = async (
   }
 };
 
+/**
+ * Translates document text to Greek or English, fully on-device.
+ * The original document is never modified — this returns a separate text.
+ */
+const translate = async (text: string, target: 'greek' | 'english'): Promise<string> => {
+  const context = await getContext();
+  try {
+    const targetName = target === 'greek' ? 'Greek (Ελληνικά)' : 'English';
+    const result = await context.completion({
+      messages: [
+        {
+          role: 'system',
+          content:
+            `You are a professional translator. Translate the user's document text into ${targetName}. ` +
+            'The source may be any language and may contain OCR errors — fix obvious ones. ' +
+            'Preserve the line structure and numbers exactly. Respond with ONLY the translation, no explanations.',
+        },
+        { role: 'user', content: text.slice(0, 3500) },
+      ],
+      n_predict: 1024,
+      temperature: 0,
+    });
+    const out = result.text.trim();
+    if (!out) {
+      throw new Error('Empty translation');
+    }
+    return out;
+  } catch (e: any) {
+    if (e instanceof LocalAIError) throw e;
+    throw new LocalAIError('EXTRACTION_FAILED', e?.message ?? 'Translation failed.');
+  } finally {
+    await releaseContext();
+  }
+};
+
 /** Suggests a short document title from OCR text. Fully on-device. */
 const suggestTitle = async (ocrText: string): Promise<string> => {
   const context = await getContext();
@@ -402,6 +437,7 @@ export const LocalAIService = {
   extractIDData,
   suggestTitle,
   classifyDocument,
+  translate,
   chat,
   releaseContext,
   MODEL_SIZE_GB: 1.1,

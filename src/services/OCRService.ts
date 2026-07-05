@@ -7,11 +7,12 @@ import { StorageService } from './StorageService';
 
 const OCR_LANG_KEY = '@docscanner/ocr_lang';
 
-export type OcrLanguage = 'greek' | 'latin';
+export type OcrLanguage = 'auto' | 'greek' | 'latin';
 
 const getOcrLanguage = async (): Promise<OcrLanguage> => {
   const value = await AsyncStorage.getItem(OCR_LANG_KEY);
-  return value === 'latin' ? 'latin' : 'greek';
+  if (value === 'latin' || value === 'greek') return value;
+  return 'auto';
 };
 
 const setOcrLanguage = async (lang: OcrLanguage): Promise<void> => {
@@ -27,20 +28,45 @@ const recognizeWithMLKit = async (imageUri: string): Promise<string> => {
 
 const recognizeWithTesseract = async (imageUri: string): Promise<string> => {
   const path = imageUri.replace(/^file:\/\//, '');
-  return await NativeModules.TesseractOcr.recognize(path, 'ell+eng');
+  // Greek only — running ell+eng together confuses lookalike letters
+  // across the two alphabets and produces mixed-script garbage.
+  return await NativeModules.TesseractOcr.recognize(path, 'ell');
+};
+
+/** Fraction of alphabetic characters that are Greek. */
+const greekRatio = (text: string): number => {
+  const letters = text.match(/[A-Za-zͰ-Ͽἀ-῿]/g);
+  if (!letters || letters.length === 0) return 0;
+  const greek = letters.filter(c => /[Ͱ-Ͽἀ-῿]/.test(c)).length;
+  return greek / letters.length;
 };
 
 const recognizeText = async (imageUri: string): Promise<string> => {
   const lang = await getOcrLanguage();
+
+  if (lang === 'latin') {
+    return await recognizeWithMLKit(imageUri);
+  }
+
   if (lang === 'greek') {
     try {
       return await recognizeWithTesseract(imageUri);
     } catch {
-      // Fall back to ML Kit if the Tesseract engine fails for any reason.
       return await recognizeWithMLKit(imageUri);
     }
   }
-  return await recognizeWithMLKit(imageUri);
+
+  // Auto: read with the Greek engine first; if the page is mostly
+  // non-Greek, trust the Latin engine's result instead.
+  try {
+    const greekText = await recognizeWithTesseract(imageUri);
+    if (greekRatio(greekText) >= 0.15) {
+      return greekText;
+    }
+    return await recognizeWithMLKit(imageUri);
+  } catch {
+    return await recognizeWithMLKit(imageUri);
+  }
 };
 
 const processPage = async (

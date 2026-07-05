@@ -124,6 +124,16 @@ const generatePDFHTML = async (doc: ScannedDocument, options?: PDFOptions): Prom
     }
   }
 
+  if (doc.translation) {
+    const langLabel = doc.translation.to === 'greek' ? 'ΕΛΛΗΝΙΚΑ' : 'ENGLISH';
+    html += `
+      <div style="page-break-before: always;">
+        <h2 style="color:#3730A3;">Translation (${langLabel})</h2>
+        <div class="ocr-text">${doc.translation.text.replace(/\n/g, '<br/>')}</div>
+      </div>
+    `;
+  }
+
   html += '</body></html>';
   return html;
 };

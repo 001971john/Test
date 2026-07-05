@@ -35,6 +35,7 @@ export const OCRResultScreen = () => {
   const [savingWord, setSavingWord] = useState(false);
   const [aiFilling, setAiFilling] = useState(false);
   const [addingPages, setAddingPages] = useState(false);
+  const [translating, setTranslating] = useState(false);
   const [aiClassifying, setAiClassifying] = useState(false);
 
   useEffect(() => {
@@ -160,6 +161,49 @@ export const OCRResultScreen = () => {
   const updateField = (field: keyof ExtractedIDData, value: string) => {
     if (!editedData) return;
     setEditedData({ ...editedData, [field]: value });
+  };
+
+  const runTranslate = async (target: 'greek' | 'english') => {
+    if (!document) return;
+    const allText = document.pages.map(p => p.ocrText).join('\n').trim();
+    if (!allText) {
+      Alert.alert('No Text', 'Run text recognition first, then translate.');
+      return;
+    }
+    if (!(await LocalAIService.isModelDownloaded())) {
+      Alert.alert(
+        'AI Model Needed',
+        'Translation runs entirely on your phone using the AI model. Download it once from Settings → Local AI (1.1 GB).',
+      );
+      return;
+    }
+    setTranslating(true);
+    try {
+      const text = await LocalAIService.translate(allText, target);
+      const updatedDoc: ScannedDocument = {
+        ...document,
+        translation: { to: target, text },
+        updatedAt: new Date().toISOString(),
+      };
+      await StorageService.saveDocument(updatedDoc);
+      setDocument(updatedDoc);
+    } catch (error: any) {
+      Alert.alert('Translation Error', error?.message ?? 'Could not translate. Try again.');
+    } finally {
+      setTranslating(false);
+    }
+  };
+
+  const handleTranslate = () => {
+    Alert.alert(
+      '🌐 Translate Document',
+      'The original scan stays untouched — the translation is added alongside it.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Σε Ελληνικά 🇬🇷', onPress: () => runTranslate('greek') },
+        { text: 'To English 🇬🇧', onPress: () => runTranslate('english') },
+      ],
+    );
   };
 
   const savePages = async (pages: ScannedDocument['pages']) => {
@@ -431,6 +475,15 @@ export const OCRResultScreen = () => {
         </View>
       )}
 
+      {document.translation && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            🌐 Translation ({document.translation.to === 'greek' ? 'Ελληνικά' : 'English'})
+          </Text>
+          <Text style={styles.ocrText}>{document.translation.text}</Text>
+        </View>
+      )}
+
       {document.pages.some(p => p.ocrText) && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Raw OCR Text</Text>
@@ -469,6 +522,24 @@ export const OCRResultScreen = () => {
           <Text style={[styles.actionButtonText, styles.secondaryButtonText]}>
             📄  More Export Options (PDF)
           </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionButton, styles.secondaryButton]}
+          onPress={handleTranslate}
+          disabled={translating}>
+          {translating ? (
+            <View style={styles.aiFillingRow}>
+              <ActivityIndicator color="#4F46E5" size="small" />
+              <Text style={[styles.actionButtonText, styles.secondaryButtonText]}>
+                {'  '}Translating on your phone…
+              </Text>
+            </View>
+          ) : (
+            <Text style={[styles.actionButtonText, styles.secondaryButtonText]}>
+              🌐  Translate (Greek / English)
+            </Text>
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity
