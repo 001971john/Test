@@ -16,7 +16,8 @@ import Share from 'react-native-share';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useDocuments } from '../hooks/useDocuments';
-import { ScannedDocument, RootStackParamList, DocumentType } from '../types';
+import { ScannedDocument, RootStackParamList, DocumentType, ID_TYPES } from '../types';
+import { TYPE_META } from '../utils/DocClassifier';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -24,21 +25,17 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const GRID_GAP = 14;
 const CARD_WIDTH = (SCREEN_WIDTH - 16 * 2 - GRID_GAP) / 2;
 
-const TYPE_META: Record<string, { label: string; icon: string; color: string }> = {
-  general: { label: 'Document', icon: '📄', color: '#4F46E5' },
-  id_card: { label: 'ID Card', icon: '🪪', color: '#0891B2' },
-  passport: { label: 'Passport', icon: '🛂', color: '#7C3AED' },
-  drivers_license: { label: 'License', icon: '🚗', color: '#D97706' },
-};
-
-type ChipFilter = 'all' | DocumentType;
+type ChipFilter = 'all' | 'ids' | DocumentType;
 
 const CHIPS: { key: ChipFilter; label: string }[] = [
   { key: 'all', label: 'All' },
-  { key: 'general', label: '📄 Docs' },
-  { key: 'id_card', label: '🪪 IDs' },
-  { key: 'passport', label: '🛂 Passports' },
-  { key: 'drivers_license', label: '🚗 Licenses' },
+  { key: 'ids', label: '🪪 IDs' },
+  { key: 'receipt', label: '🧾 Receipts' },
+  { key: 'medical', label: '🏥 Medical' },
+  { key: 'invoice', label: '💶 Invoices' },
+  { key: 'letter', label: '✉️ Letters' },
+  { key: 'contract', label: '📜 Contracts' },
+  { key: 'general', label: '📄 Other' },
 ];
 
 export const HomeScreen = () => {
@@ -55,7 +52,11 @@ export const HomeScreen = () => {
 
   const query = search.trim().toLowerCase();
   const filteredDocuments = documents.filter(doc => {
-    if (chip !== 'all' && doc.type !== chip) return false;
+    if (chip === 'ids') {
+      if (!ID_TYPES.includes(doc.type)) return false;
+    } else if (chip !== 'all' && doc.type !== chip) {
+      return false;
+    }
     if (!query) return true;
     return (
       doc.title.toLowerCase().includes(query) ||
@@ -63,7 +64,7 @@ export const HomeScreen = () => {
     );
   });
 
-  const idCount = documents.filter(d => d.type !== 'general').length;
+  const idCount = documents.filter(d => ID_TYPES.includes(d.type)).length;
 
   const handleShare = async (doc: ScannedDocument) => {
     const urls = doc.pages.map(p => `file://${p.processedImageUri}`);

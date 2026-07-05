@@ -1,8 +1,8 @@
 import { generateId } from '../utils/id';
-import { ScannedDocument, ScannedPage } from '../types';
+import { ScannedDocument, ScannedPage, DocumentType } from '../types';
 import { StorageService } from './StorageService';
 
-const createNewDocument = (type: 'general' | 'id_card' | 'passport' | 'drivers_license' = 'general'): ScannedDocument => {
+const createNewDocument = (type: DocumentType = 'general'): ScannedDocument => {
   const now = new Date().toISOString();
   return {
     id: generateId(),

@@ -8,7 +8,7 @@ import {
   Alert,
 } from 'react-native';
 import { useRoute, RouteProp } from '@react-navigation/native';
-import { RootStackParamList, ScannedDocument } from '../types';
+import { RootStackParamList, ScannedDocument, ID_TYPES } from '../types';
 import { StorageService } from '../services/StorageService';
 import { ExportService } from '../services/ExportService';
 
@@ -31,12 +31,13 @@ export const ExportScreen = () => {
     const docs = await StorageService.getAllDocuments();
     const doc = docs.find(d => d.id === documentId);
     setDocument(doc || null);
-    if (doc && doc.type !== 'general' && doc.pages.length === 2) {
+    if (doc && ID_TYPES.includes(doc.type) && doc.pages.length === 2) {
       setIdCardSheet(true);
     }
   };
 
-  const idCardSheetAvailable = !!document && document.type !== 'general' && document.pages.length >= 2;
+  const idCardSheetAvailable =
+    !!document && ID_TYPES.includes(document.type) && document.pages.length >= 2;
 
   const handleExport = async (format: 'pdf' | 'docx') => {
     if (!document) return;

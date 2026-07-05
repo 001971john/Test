@@ -170,7 +170,7 @@ const releaseContext = async (): Promise<void> => {
   }
 };
 
-const DOC_TYPE_HINTS: Record<DocumentType, string> = {
+const DOC_TYPE_HINTS: Partial<Record<DocumentType, string>> = {
   general: 'a general document',
   id_card: 'a national identity card (may be Greek: Δελτίο Ταυτότητας)',
   passport: 'a passport (may be Greek: Διαβατήριο)',
@@ -216,7 +216,7 @@ const extractIDData = async (
         {
           role: 'system',
           content:
-            `You extract structured data from OCR text of ${DOC_TYPE_HINTS[docType]}. ` +
+            `You extract structured data from OCR text of ${DOC_TYPE_HINTS[docType] ?? 'a document'}. ` +
             'The text may be in Greek, English, or both, and may contain OCR errors. ' +
             'Respond with ONLY a JSON object using these keys (omit keys you cannot find): ' +
             EXTRACT_KEYS.join(', ') +
@@ -245,6 +245,58 @@ const extractIDData = async (
     throw new LocalAIError('EXTRACTION_FAILED', e?.message ?? 'The AI could not read this document.');
   } finally {
     // Free the ~1.5 GB of RAM as soon as we're done.
+    await releaseContext();
+  }
+};
+
+const CLASSIFY_CATEGORIES: DocumentType[] = [
+  'general',
+  'receipt',
+  'medical',
+  'invoice',
+  'letter',
+  'contract',
+];
+
+export interface ClassificationResult {
+  category: DocumentType;
+  title: string;
+}
+
+/**
+ * Classifies a scanned document by its OCR text and suggests a title.
+ * Fully on-device.
+ */
+const classifyDocument = async (ocrText: string): Promise<ClassificationResult> => {
+  const context = await getContext();
+  try {
+    const result = await context.completion({
+      messages: [
+        {
+          role: 'system',
+          content:
+            'Classify the OCR text of a scanned document (Greek or English). ' +
+            `Respond with ONLY JSON: {"category": "<one of: ${CLASSIFY_CATEGORIES.join(
+              ', ',
+            )}>", "title": "<short descriptive title, max 6 words, in the document's language>"}. ` +
+            'receipt = shop/purchase receipt; invoice = τιμολόγιο/bill; medical = hospital, doctor, prescription or exam papers; ' +
+            'letter = correspondence; contract = agreements/terms; general = anything else.',
+        },
+        { role: 'user', content: ocrText.slice(0, 3000) },
+      ],
+      n_predict: 96,
+      temperature: 0,
+    });
+    const raw = parseJSONLoose(result.text);
+    const category = CLASSIFY_CATEGORIES.includes(raw.category as DocumentType)
+      ? (raw.category as DocumentType)
+      : 'general';
+    const title =
+      typeof raw.title === 'string' && raw.title.trim()
+        ? raw.title.trim().slice(0, 80)
+        : '';
+    return { category, title };
+  } finally {
     await releaseContext();
   }
 };
@@ -349,6 +401,7 @@ export const LocalAIService = {
   deleteModel,
   extractIDData,
   suggestTitle,
+  classifyDocument,
   chat,
   releaseContext,
   MODEL_SIZE_GB: 1.1,

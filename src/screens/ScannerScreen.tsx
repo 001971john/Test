@@ -11,14 +11,16 @@ import { Camera, useCameraDevice, useCameraPermission } from 'react-native-visio
 import DocumentScanner from 'react-native-document-scanner-plugin';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList, DocumentType } from '../types';
+import { RootStackParamList, DocumentType, ScannedDocument } from '../types';
 import { ScannerService } from '../services/ScannerService';
 import { OCRService } from '../services/OCRService';
+import { StorageService } from '../services/StorageService';
+import { classifyByKeywords } from '../utils/DocClassifier';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const DOC_TYPES: { label: string; value: DocumentType }[] = [
-  { label: 'General', value: 'general' },
+  { label: '✨ Auto', value: 'general' },
   { label: 'ID Card', value: 'id_card' },
   { label: 'Passport', value: 'passport' },
   { label: "Driver's License", value: 'drivers_license' },
@@ -49,7 +51,23 @@ export const ScannerScreen = () => {
           currentDoc = document;
         }
 
-        const processedDoc = await OCRService.processAllPages(currentDoc);
+        let processedDoc = await OCRService.processAllPages(currentDoc);
+
+        // Auto-classify "✨ Auto" scans by their text content (instant, offline).
+        if (processedDoc.type === 'general') {
+          const allText = processedDoc.pages.map(p => p.ocrText).join('\n');
+          const detected = classifyByKeywords(allText);
+          if (detected) {
+            const reclassified: ScannedDocument = {
+              ...processedDoc,
+              type: detected,
+              updatedAt: new Date().toISOString(),
+            };
+            await StorageService.saveDocument(reclassified);
+            processedDoc = reclassified;
+          }
+        }
+
         navigation.navigate('OCRResult', { documentId: processedDoc.id });
       }
     } catch (error: any) {

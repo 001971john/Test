@@ -1,4 +1,16 @@
-export type DocumentType = 'general' | 'id_card' | 'passport' | 'drivers_license';
+export type DocumentType =
+  | 'general'
+  | 'id_card'
+  | 'passport'
+  | 'drivers_license'
+  | 'receipt'
+  | 'medical'
+  | 'invoice'
+  | 'letter'
+  | 'contract';
+
+/** Document types that carry structured ID data (name, number, dates…). */
+export const ID_TYPES: DocumentType[] = ['id_card', 'passport', 'drivers_license'];
 export type FilterType = 'color' | 'enhanced' | 'grayscale' | 'bw';
 
 export interface ScannedPage {

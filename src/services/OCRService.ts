@@ -1,7 +1,7 @@
 import { NativeModules } from 'react-native';
 import TextRecognition from '@react-native-ml-kit/text-recognition';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ScannedDocument } from '../types';
+import { ScannedDocument, ID_TYPES } from '../types';
 import { IDParser } from '../utils/IDParser';
 import { StorageService } from './StorageService';
 
@@ -62,7 +62,7 @@ const processPage = async (
     updatedAt: new Date().toISOString(),
   };
 
-  if (document.type !== 'general') {
+  if (ID_TYPES.includes(document.type)) {
     const allText = updatedDoc.pages.map(p => p.ocrText).join('\n');
     updatedDoc.extractedData = IDParser.parseIDDocument(allText, document.type);
   }

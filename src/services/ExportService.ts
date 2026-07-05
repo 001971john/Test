@@ -3,7 +3,7 @@ import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, Width
 import ReactNativeBlobUtil from 'react-native-blob-util';
 import Share from 'react-native-share';
 import { Buffer } from 'buffer';
-import { ScannedDocument, ExtractedIDData } from '../types';
+import { ScannedDocument, ExtractedIDData, ID_TYPES } from '../types';
 import { StorageService } from './StorageService';
 
 // Shared field order/labels for the ID information form in every export.
@@ -27,6 +27,11 @@ const DOC_TYPE_LABELS: Record<string, string> = {
   id_card: 'IDENTITY CARD',
   passport: 'PASSPORT',
   drivers_license: "DRIVER'S LICENSE",
+  receipt: 'RECEIPT',
+  medical: 'MEDICAL DOCUMENT',
+  invoice: 'INVOICE',
+  letter: 'LETTER',
+  contract: 'CONTRACT',
 };
 
 export interface PDFOptions {
@@ -67,7 +72,7 @@ const generatePDFHTML = async (doc: ScannedDocument, options?: PDFOptions): Prom
       </div>
   `;
 
-  if (doc.extractedData && doc.type !== 'general') {
+  if (doc.extractedData && ID_TYPES.includes(doc.type)) {
     const data = doc.extractedData;
     const present = ID_FIELD_DEFS.filter(f => data[f.key]);
     if (present.length > 0) {
@@ -193,7 +198,7 @@ const exportToDOCX = async (doc: ScannedDocument): Promise<ExportResult> => {
     new Paragraph({ text: '' }),
   ];
 
-  if (doc.extractedData && doc.type !== 'general') {
+  if (doc.extractedData && ID_TYPES.includes(doc.type)) {
     const typeLabel = DOC_TYPE_LABELS[doc.type] ?? doc.type.toUpperCase();
     children.push(
       new Paragraph({

@@ -14,12 +14,13 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import ReactNativeBlobUtil from 'react-native-blob-util';
 import DocumentScanner from 'react-native-document-scanner-plugin';
-import { RootStackParamList, ScannedDocument, ExtractedIDData } from '../types';
+import { RootStackParamList, ScannedDocument, ExtractedIDData, ID_TYPES } from '../types';
 import { StorageService } from '../services/StorageService';
 import { ScannerService } from '../services/ScannerService';
 import { OCRService } from '../services/OCRService';
 import { ExportService } from '../services/ExportService';
 import { LocalAIService, LocalAIError } from '../services/LocalAIService';
+import { TYPE_META } from '../utils/DocClassifier';
 
 type ScreenRouteProp = RouteProp<RootStackParamList, 'OCRResult'>;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -34,6 +35,7 @@ export const OCRResultScreen = () => {
   const [savingWord, setSavingWord] = useState(false);
   const [aiFilling, setAiFilling] = useState(false);
   const [addingPages, setAddingPages] = useState(false);
+  const [aiClassifying, setAiClassifying] = useState(false);
 
   useEffect(() => {
     loadDocument();
@@ -46,8 +48,39 @@ export const OCRResultScreen = () => {
     if (doc) {
       setDocument(doc);
       setEditedData(doc.extractedData || null);
+      refineCategoryWithAI(doc);
     }
     setLoading(false);
+  };
+
+  // Non-blocking: let the on-device AI refine the category and title
+  // of non-ID documents when the model is available.
+  const refineCategoryWithAI = async (doc: ScannedDocument) => {
+    if (ID_TYPES.includes(doc.type)) return;
+    const allText = doc.pages.map(p => p.ocrText).join('\n').trim();
+    if (!allText) return;
+    if (!(await LocalAIService.isModelDownloaded())) return;
+    setAiClassifying(true);
+    try {
+      const { category, title } = await LocalAIService.classifyDocument(allText);
+      const isDefaultTitle = /^Scan\s/.test(doc.title);
+      const updated: ScannedDocument = {
+        ...doc,
+        type: category,
+        title: isDefaultTitle && title ? title : doc.title,
+        updatedAt: new Date().toISOString(),
+      };
+      await StorageService.saveDocument(updated);
+      setDocument(current =>
+        current && current.id === updated.id
+          ? { ...current, type: updated.type, title: updated.title }
+          : current,
+      );
+    } catch {
+      // Classification is best-effort — keep the keyword-based category.
+    } finally {
+      setAiClassifying(false);
+    }
   };
 
   const handleKeepOriginal = async () => {
@@ -288,9 +321,21 @@ export const OCRResultScreen = () => {
         placeholder="Document Title"
       />
 
-      <Text style={styles.docType}>
-        {document.type.replace(/_/g, ' ').toUpperCase()}
-      </Text>
+      <View style={styles.docTypeRow}>
+        <View
+          style={[
+            styles.docTypeBadge,
+            { backgroundColor: (TYPE_META[document.type] ?? TYPE_META.general).color },
+          ]}>
+          <Text style={styles.docTypeBadgeText}>
+            {(TYPE_META[document.type] ?? TYPE_META.general).icon}{' '}
+            {(TYPE_META[document.type] ?? TYPE_META.general).label}
+          </Text>
+        </View>
+        {aiClassifying && (
+          <Text style={styles.aiClassifyingText}>  🏷 AI is categorizing…</Text>
+        )}
+      </View>
 
       {document.pages.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pagesScroll}>
@@ -351,7 +396,7 @@ export const OCRResultScreen = () => {
         </ScrollView>
       )}
 
-      {editedData && document.type !== 'general' && (
+      {editedData && ID_TYPES.includes(document.type) && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Extracted Information</Text>
           <Text style={styles.confidenceText}>
@@ -461,6 +506,19 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 8,
   },
+  docTypeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    marginLeft: 4,
+  },
+  docTypeBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 14,
+  },
+  docTypeBadgeText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
+  aiClassifyingText: { fontSize: 12, color: '#6B7280', fontStyle: 'italic' },
   docType: {
     fontSize: 14,
     color: '#4F46E5',
