@@ -43,6 +43,8 @@ export const HomeScreen = () => {
   const { documents, loading, loadDocuments, removeDocument } = useDocuments();
   const [search, setSearch] = useState('');
   const [chip, setChip] = useState<ChipFilter>('all');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const selecting = selectedIds.size > 0;
 
   useFocusEffect(
     useCallback(() => {
@@ -90,15 +92,65 @@ export const HomeScreen = () => {
     ]);
   };
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const handleBulkShare = async () => {
+    const docs = documents.filter(d => selectedIds.has(d.id));
+    const urls = docs.flatMap(d => d.pages.map(p => `file://${p.processedImageUri}`));
+    if (urls.length === 0) {
+      Alert.alert('Nothing to Share', 'Selected documents have no pages.');
+      return;
+    }
+    try {
+      await Share.open({ urls });
+    } catch {
+      // user dismissed the share sheet
+    }
+  };
+
+  const handleBulkDelete = () => {
+    const count = selectedIds.size;
+    Alert.alert('Delete Documents', `Delete ${count} selected document${count === 1 ? '' : 's'}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          for (const id of selectedIds) {
+            await removeDocument(id);
+          }
+          clearSelection();
+        },
+      },
+    ]);
+  };
+
   const renderItem = ({ item }: { item: ScannedDocument }) => {
     const thumbnail = item.pages[0]?.processedImageUri;
     const meta = TYPE_META[item.type] ?? TYPE_META.general;
+    const isSelected = selectedIds.has(item.id);
     return (
       <TouchableOpacity
-        style={styles.card}
+        style={[styles.card, isSelected && styles.cardSelected]}
         activeOpacity={0.88}
-        onPress={() => navigation.navigate('OCRResult', { documentId: item.id })}
-        onLongPress={() => handleDelete(item)}>
+        onPress={() =>
+          selecting
+            ? toggleSelect(item.id)
+            : navigation.navigate('OCRResult', { documentId: item.id })
+        }
+        onLongPress={() => toggleSelect(item.id)}>
         <View style={styles.thumbWrap}>
           {thumbnail ? (
             <Image source={{ uri: `file://${thumbnail}` }} style={styles.thumbnail} />
@@ -117,6 +169,11 @@ export const HomeScreen = () => {
               <Text style={styles.pageBadgeText}>{item.pages.length}p</Text>
             </View>
           )}
+          {selecting && (
+            <View style={[styles.selectCheck, isSelected && styles.selectCheckActive]}>
+              {isSelected && <Text style={styles.selectCheckMark}>✓</Text>}
+            </View>
+          )}
         </View>
         <View style={styles.cardBody}>
           <Text style={styles.cardTitle} numberOfLines={1}>
@@ -126,18 +183,20 @@ export const HomeScreen = () => {
             <Text style={styles.cardDate}>
               {new Date(item.createdAt).toLocaleDateString()}
             </Text>
-            <View style={styles.cardActions}>
-              <TouchableOpacity
-                onPress={() => handleShare(item)}
-                hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}>
-                <Text style={styles.actionIcon}>📤</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => handleDelete(item)}
-                hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}>
-                <Text style={styles.actionIcon}>🗑</Text>
-              </TouchableOpacity>
-            </View>
+            {!selecting && (
+              <View style={styles.cardActions}>
+                <TouchableOpacity
+                  onPress={() => handleShare(item)}
+                  hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}>
+                  <Text style={styles.actionIcon}>📤</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleDelete(item)}
+                  hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}>
+                  <Text style={styles.actionIcon}>🗑</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </View>
       </TouchableOpacity>
@@ -178,21 +237,38 @@ export const HomeScreen = () => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.brand}>DocScanner</Text>
-            <Text style={styles.brandSub}>
-              {documents.length === 0
-                ? 'Your private, offline document scanner'
-                : `${documents.length} ${documents.length === 1 ? 'document' : 'documents'}${
-                    idCount > 0 ? ` · ${idCount} ID${idCount === 1 ? '' : 's'}` : ''
-                  }`}
-            </Text>
+        {selecting ? (
+          <View style={styles.headerRow}>
+            <TouchableOpacity onPress={clearSelection} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Text style={styles.selectionCancel}>✕ Cancel</Text>
+            </TouchableOpacity>
+            <Text style={styles.selectionCount}>{selectedIds.size} selected</Text>
+            <View style={styles.selectionActions}>
+              <TouchableOpacity onPress={handleBulkShare} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Text style={styles.selectionActionIcon}>📤</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleBulkDelete} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Text style={styles.selectionActionIcon}>🗑</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-          <View style={styles.brandMark}>
-            <Text style={styles.brandMarkText}>📑</Text>
+        ) : (
+          <View style={styles.headerRow}>
+            <View>
+              <Text style={styles.brand}>DocScanner</Text>
+              <Text style={styles.brandSub}>
+                {documents.length === 0
+                  ? 'Your private, offline document scanner'
+                  : `${documents.length} ${documents.length === 1 ? 'document' : 'documents'}${
+                      idCount > 0 ? ` · ${idCount} ID${idCount === 1 ? '' : 's'}` : ''
+                    }`}
+              </Text>
+            </View>
+            <View style={styles.brandMark}>
+              <Text style={styles.brandMarkText}>📑</Text>
+            </View>
           </View>
-        </View>
+        )}
       </View>
 
       <View style={styles.searchWrap}>
@@ -279,6 +355,32 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.25)',
   },
   brandMarkText: { fontSize: 22 },
+  selectionCancel: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
+  selectionCount: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
+  selectionActions: { flexDirection: 'row', gap: 20 },
+  selectionActionIcon: { fontSize: 20 },
+  cardSelected: {
+    borderWidth: 3,
+    borderColor: '#4F46E5',
+  },
+  selectCheck: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selectCheckActive: {
+    backgroundColor: '#4F46E5',
+    borderColor: '#4F46E5',
+  },
+  selectCheckMark: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
   searchWrap: {
     marginTop: -22,
     paddingHorizontal: 16,
