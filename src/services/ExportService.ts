@@ -1,5 +1,5 @@
 import { generatePDF } from 'react-native-html-to-pdf';
-import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, HeadingLevel, ImageRun } from 'docx';
+import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, HeadingLevel, ImageRun, AlignmentType } from 'docx';
 import ReactNativeBlobUtil from 'react-native-blob-util';
 import Share from 'react-native-share';
 import { Buffer } from 'buffer';
@@ -235,37 +235,47 @@ const exportToPDF = async (doc: ScannedDocument, options?: PDFOptions): Promise<
   };
 };
 
-const exportToDOCX = async (
-  doc: ScannedDocument,
-  options?: { includeExtras?: boolean },
-): Promise<ExportResult> => {
-  const includeExtras = !!options?.includeExtras;
-  const children: any[] = includeExtras
-    ? [
-        new Paragraph({ text: doc.title, heading: HeadingLevel.HEADING_1 }),
+/** Split OCR text into clean, structured body paragraphs. */
+const textToParagraphs = (text: string): Paragraph[] =>
+  text
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(line => line.length > 0)
+    .map(
+      line =>
         new Paragraph({
-          children: [
-            new TextRun({ text: `Scanned on: ${new Date(doc.createdAt).toLocaleString()}` }),
-          ],
+          children: [new TextRun({ text: line, size: 22 })],
+          spacing: { after: 100 },
         }),
-        new Paragraph({
-          children: [
-            new TextRun({ text: `Document type: ${doc.type.replace(/_/g, ' ').toUpperCase()}` }),
-          ],
-        }),
-        new Paragraph({ text: '' }),
-      ]
-    : [];
-
-  if (includeExtras && doc.extractedData && ID_TYPES.includes(doc.type)) {
-    const typeLabel = DOC_TYPE_LABELS[doc.type] ?? doc.type.toUpperCase();
-    children.push(
-      new Paragraph({
-        text: `${typeLabel} — Extracted Information`,
-        heading: HeadingLevel.HEADING_2,
-      }),
     );
 
+const exportToDOCX = async (doc: ScannedDocument): Promise<ExportResult> => {
+  const typeLabel = DOC_TYPE_LABELS[doc.type] ?? doc.type.toUpperCase();
+  const children: any[] = [];
+
+  // ---- Title block ----
+  children.push(
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 40 },
+      children: [new TextRun({ text: doc.title, bold: true, size: 40, color: '3730A3' })],
+    }),
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 260 },
+      children: [
+        new TextRun({
+          text: `${typeLabel}  ·  ${new Date(doc.createdAt).toLocaleDateString()}`,
+          size: 18,
+          color: '6B7280',
+          allCaps: true,
+        }),
+      ],
+    }),
+  );
+
+  // ---- ID details table ----
+  if (doc.extractedData && ID_TYPES.includes(doc.type)) {
     const data = doc.extractedData;
     const rows = ID_FIELD_DEFS.filter(f => data[f.key]).map(
       f =>
@@ -274,7 +284,7 @@ const exportToDOCX = async (
             new TableCell({
               children: [
                 new Paragraph({
-                  children: [new TextRun({ text: f.label.toUpperCase(), bold: true, size: 18, color: '3730A3' })],
+                  children: [new TextRun({ text: f.label.toUpperCase(), bold: true, size: 16, color: '3730A3' })],
                 }),
               ],
               width: { size: 38, type: WidthType.PERCENTAGE },
@@ -282,100 +292,82 @@ const exportToDOCX = async (
             }),
             new TableCell({
               children: [
-                new Paragraph({
-                  children: [new TextRun({ text: String(data[f.key]), bold: true, size: 24 })],
-                }),
+                new Paragraph({ children: [new TextRun({ text: String(data[f.key]), bold: true, size: 22 })] }),
               ],
               width: { size: 62, type: WidthType.PERCENTAGE },
             }),
           ],
         }),
     );
-
-    if (rows.length > 0) {
-      rows.push(
-        new TableRow({
-          children: [
-            new TableCell({
-              children: [
-                new Paragraph({
-                  children: [new TextRun({ text: 'EXTRACTION CONFIDENCE', bold: true, size: 18, color: '3730A3' })],
-                }),
-              ],
-              shading: { fill: 'EEF2FF' },
-            }),
-            new TableCell({
-              children: [
-                new Paragraph({
-                  children: [
-                    new TextRun({
-                      text: `${Math.round(data.confidence * 100)}% — verify against the original document`,
-                      size: 20,
-                    }),
-                  ],
-                }),
-              ],
-            }),
-          ],
-        }),
-      );
-    }
-
     if (rows.length > 0) {
       children.push(
-        new Table({
-          width: { size: 100, type: WidthType.PERCENTAGE },
-          rows,
-        }),
-        new Paragraph({ text: '' }),
+        new Paragraph({ text: 'Details', heading: HeadingLevel.HEADING_2, spacing: { after: 120 } }),
+        new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }),
+        new Paragraph({ text: '', spacing: { after: 200 } }),
       );
     }
   }
 
-  for (let i = 0; i < doc.pages.length; i++) {
-    const page = doc.pages[i];
-    if (includeExtras) {
-      children.push(
-        new Paragraph({ text: '' }),
-        new Paragraph({ text: `Page ${i + 1}`, heading: HeadingLevel.HEADING_2 }),
-      );
-    }
+  // ---- Document text (the structured, editable core) ----
+  const allText = doc.pages
+    .map(p => p.ocrText)
+    .filter(t => t && t.trim().length > 0)
+    .join('\n');
+  if (allText.trim().length > 0) {
+    children.push(
+      new Paragraph({ text: 'Document Text', heading: HeadingLevel.HEADING_2, spacing: { after: 120 } }),
+      ...textToParagraphs(allText),
+      new Paragraph({ text: '', spacing: { after: 200 } }),
+    );
+  }
 
+  // ---- Translation ----
+  if (doc.translation) {
+    const langLabel = doc.translation.to === 'greek' ? 'Ελληνικά' : 'English';
+    children.push(
+      new Paragraph({
+        text: `Translation (${langLabel})`,
+        heading: HeadingLevel.HEADING_2,
+        spacing: { after: 120 },
+      }),
+      ...textToParagraphs(doc.translation.text),
+      new Paragraph({ text: '', spacing: { after: 200 } }),
+    );
+  }
+
+  // ---- Original scan(s) as reference figures ----
+  children.push(
+    new Paragraph({ text: 'Original Scan', heading: HeadingLevel.HEADING_2, spacing: { after: 120 } }),
+  );
+  for (const page of doc.pages) {
     try {
       const base64 = await StorageService.getImageBase64(page.processedImageUri);
       const imageBuffer = Buffer.from(base64, 'base64');
       children.push(
         new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 160 },
           children: [
             new ImageRun({
               data: imageBuffer,
-              // Near-full A4 width for a faithful copy of the scan.
-              transformation: { width: 600, height: 780 },
+              transformation: { width: 460, height: 600 },
               type: 'jpg',
             }),
           ],
         }),
       );
     } catch {}
-
-    if (includeExtras && page.ocrText) {
-      children.push(
-        new Paragraph({ text: 'Extracted Text:', heading: HeadingLevel.HEADING_3 }),
-        new Paragraph({ text: page.ocrText }),
-      );
-    }
-  }
-
-  if (includeExtras && doc.translation) {
-    const langLabel = doc.translation.to === 'greek' ? 'Ελληνικά' : 'English';
-    children.push(
-      new Paragraph({ text: '' }),
-      new Paragraph({ text: `Translation (${langLabel})`, heading: HeadingLevel.HEADING_2 }),
-      new Paragraph({ text: doc.translation.text }),
-    );
   }
 
   const docx = new Document({
+    styles: {
+      default: {
+        document: {
+          run: { font: 'Calibri', size: 22 },
+          paragraph: { spacing: { after: 120, line: 276 } },
+        },
+      },
+    },
     sections: [{ children }],
   });
 

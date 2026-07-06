@@ -50,7 +50,7 @@ export const ExportScreen = () => {
               idCardSheet: idCardSheetAvailable && idCardSheet,
               includeExtras,
             })
-          : await ExportService.exportToDOCX(document, { includeExtras });
+          : await ExportService.exportToDOCX(document);
       setLastExportPath(result.filePath);
       const location = result.savedToDownloads
         ? `Saved to:\n📁 ${result.downloadsPath}\n\nOpen your Files app → Downloads → DocScanner to find it.`
@@ -114,10 +114,10 @@ export const ExportScreen = () => {
         onPress={() => setIncludeExtras(v => !v)}>
         <Text style={styles.idCardToggleIcon}>📝</Text>
         <View style={styles.idCardToggleInfo}>
-          <Text style={styles.idCardToggleTitle}>Add extracted data & text pages</Text>
+          <Text style={styles.idCardToggleTitle}>Add data & text pages to the PDF</Text>
           <Text style={styles.idCardToggleDesc}>
-            Off = a faithful copy of your scan. On = adds extra pages with the recognized text,
-            ID fields and translation.
+            PDF only. Off = a faithful copy of your scan. On = adds pages with the recognized text,
+            ID fields and translation. (Word is always a formatted document.)
           </Text>
         </View>
         <Text style={styles.idCardToggleCheck}>{includeExtras ? '✅' : '⬜'}</Text>
@@ -138,7 +138,7 @@ export const ExportScreen = () => {
               <View style={styles.exportInfo}>
                 <Text style={styles.exportLabel}>PDF Document</Text>
                 <Text style={styles.exportDesc}>
-                  A faithful copy of your scan — same as the original.
+                  Exact copy of your scanned document (image).
                 </Text>
               </View>
             </>
@@ -157,7 +157,7 @@ export const ExportScreen = () => {
               <View style={styles.exportInfo}>
                 <Text style={styles.exportLabel}>Word Document (.docx)</Text>
                 <Text style={styles.exportDesc}>
-                  Your scan as an editable Word file — same as the original.
+                  Nicely formatted, editable — title, your text, data & scan.
                 </Text>
               </View>
             </>
