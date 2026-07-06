@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LockService } from '../services/LockService';
 import { OCRService, OcrLanguage } from '../services/OCRService';
 import { LocalAIService } from '../services/LocalAIService';
+import { BackupService, BackupFile } from '../services/BackupService';
 
 export const SettingsScreen = () => {
   const [lockEnabled, setLockEnabled] = useState(false);
@@ -13,6 +14,10 @@ export const SettingsScreen = () => {
   const [ocrLang, setOcrLang] = useState<OcrLanguage>('greek');
   const [aiStatus, setAiStatus] = useState<'checking' | 'missing' | 'downloading' | 'ready'>('checking');
   const [aiProgress, setAiProgress] = useState(0);
+  const [backups, setBackups] = useState<BackupFile[]>([]);
+  const [backupBusy, setBackupBusy] = useState(false);
+
+  const loadBackups = () => BackupService.listBackups().then(setBackups);
 
   useEffect(() => {
     LockService.isLockEnabled().then(setLockEnabled);
@@ -20,7 +25,53 @@ export const SettingsScreen = () => {
     LocalAIService.isModelDownloaded().then(ready =>
       setAiStatus(ready ? 'ready' : 'missing'),
     );
+    loadBackups();
   }, []);
+
+  const handleCreateBackup = async () => {
+    setBackupBusy(true);
+    try {
+      const backup = await BackupService.createBackup();
+      await loadBackups();
+      Alert.alert(
+        'Backup Created',
+        `Saved to Downloads/DocScanner/Backups/${backup.filename}\n\nKeep this file safe — it's the only copy of your scans outside this phone.`,
+      );
+    } catch (e: any) {
+      Alert.alert('Backup Failed', e?.message ?? 'Please try again.');
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const handleRestoreBackup = (backup: BackupFile) => {
+    Alert.alert(
+      'Restore Backup',
+      `Restore documents from ${backup.filename}? Documents already on this phone won't be duplicated.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Restore',
+          onPress: async () => {
+            setBackupBusy(true);
+            try {
+              const count = await BackupService.restoreBackup(backup.path);
+              Alert.alert(
+                'Restore Complete',
+                count > 0
+                  ? `Restored ${count} document${count === 1 ? '' : 's'}. Check your Documents tab.`
+                  : 'Everything in this backup is already on your phone.',
+              );
+            } catch (e: any) {
+              Alert.alert('Restore Failed', e?.message ?? 'Please try again.');
+            } finally {
+              setBackupBusy(false);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   const handleDownloadModel = () => {
     Alert.alert(
@@ -284,6 +335,40 @@ export const SettingsScreen = () => {
       </View>
 
       <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Backup & Restore</Text>
+        <TouchableOpacity style={styles.primaryButton} onPress={handleCreateBackup} disabled={backupBusy}>
+          <Text style={styles.primaryButtonText}>
+            {backupBusy ? 'Working…' : '📦  Create Backup Now'}
+          </Text>
+        </TouchableOpacity>
+        {backups.length > 0 && (
+          <View style={{ marginTop: 12 }}>
+            {backups.map(b => (
+              <View key={b.path} style={styles.backupRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.backupName} numberOfLines={1}>{b.filename}</Text>
+                  <Text style={styles.backupMeta}>
+                    {b.date.toLocaleDateString()}  ·  {(b.size / 1024 / 1024).toFixed(1)} MB
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => handleRestoreBackup(b)}
+                  disabled={backupBusy}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={styles.backupRestore}>Restore</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        )}
+        <Text style={styles.storageNote}>
+          A backup is a single file with all your scans, saved to Downloads/DocScanner/Backups.
+          It protects your documents if you lose or reset your phone — still 100% local, nothing
+          is uploaded anywhere.
+        </Text>
+      </View>
+
+      <View style={styles.section}>
         <Text style={styles.sectionTitle}>Data</Text>
         <TouchableOpacity style={styles.dangerButton} onPress={handleClearData}>
           <Text style={styles.dangerButtonText}>Clear All Data</Text>
@@ -367,6 +452,16 @@ const styles = StyleSheet.create({
     marginTop: 12,
     color: '#111827',
   },
+  backupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E7EAF0',
+  },
+  backupName: { fontSize: 14, fontWeight: '600', color: '#111827' },
+  backupMeta: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+  backupRestore: { fontSize: 14, fontWeight: '700', color: '#4F46E5', marginLeft: 12 },
   dangerButton: {
     backgroundColor: '#E11D48',
     padding: 14,

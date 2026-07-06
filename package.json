@@ -33,6 +33,7 @@
     "react-native-share": "^12.3.1",
     "react-native-vector-icons": "^10.3.0",
     "react-native-vision-camera": "^5.0.11",
+    "react-native-zip-archive": "^8.0.1",
     "uuid": "^14.0.1"
   },
   "devDependencies": {

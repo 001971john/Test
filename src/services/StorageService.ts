@@ -68,6 +68,7 @@ const getImageBase64 = async (uri: string): Promise<string> => {
 
 export const StorageService = {
   getAllDocuments,
+  saveAllDocuments,
   saveDocument,
   deleteDocument,
   saveImage,
