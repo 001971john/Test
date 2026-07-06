@@ -4,6 +4,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { LockScreen } from './src/screens/LockScreen';
 import { LockService } from './src/services/LockService';
+import { ReminderService } from './src/services/ReminderService';
 
 function App() {
   const [checkingLock, setCheckingLock] = useState(true);
@@ -14,6 +15,7 @@ function App() {
       setLocked(enabled);
       setCheckingLock(false);
     });
+    ReminderService.scheduleExpiryReminders().catch(() => {});
   }, []);
 
   if (checkingLock) {

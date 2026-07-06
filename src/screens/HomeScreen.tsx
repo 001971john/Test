@@ -18,6 +18,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useDocuments } from '../hooks/useDocuments';
 import { ScannedDocument, RootStackParamList, DocumentType, ID_TYPES } from '../types';
 import { TYPE_META } from '../utils/DocClassifier';
+import { ReminderService, ExpiringDoc } from '../services/ReminderService';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -45,10 +46,12 @@ export const HomeScreen = () => {
   const [chip, setChip] = useState<ChipFilter>('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const selecting = selectedIds.size > 0;
+  const [expiring, setExpiring] = useState<ExpiringDoc[]>([]);
 
   useFocusEffect(
     useCallback(() => {
       loadDocuments();
+      ReminderService.getExpiringDocuments().then(setExpiring);
     }, [loadDocuments]),
   );
 
@@ -287,6 +290,18 @@ export const HomeScreen = () => {
         )}
       </View>
 
+      {expiring.length > 0 && !selecting && (
+        <TouchableOpacity
+          style={styles.expiryBanner}
+          onPress={() =>
+            navigation.navigate('OCRResult', { documentId: expiring[0].document.id })
+          }>
+          <Text style={styles.expiryBannerText}>
+            ⚠️ {expiring.length} document{expiring.length === 1 ? '' : 's'} expiring soon
+          </Text>
+        </TouchableOpacity>
+      )}
+
       {documents.length > 0 && (
         <View style={styles.chipsWrap}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
@@ -381,6 +396,17 @@ const styles = StyleSheet.create({
     borderColor: '#4F46E5',
   },
   selectCheckMark: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
+  expiryBanner: {
+    marginTop: 14,
+    marginHorizontal: 16,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  expiryBannerText: { color: '#92400E', fontSize: 13, fontWeight: '700', textAlign: 'center' },
   searchWrap: {
     marginTop: -22,
     paddingHorizontal: 16,

@@ -20,6 +20,7 @@ import { ScannerService } from '../services/ScannerService';
 import { OCRService } from '../services/OCRService';
 import { ExportService } from '../services/ExportService';
 import { LocalAIService, LocalAIError } from '../services/LocalAIService';
+import { ReminderService } from '../services/ReminderService';
 import { TYPE_META } from '../utils/DocClassifier';
 
 type ScreenRouteProp = RouteProp<RootStackParamList, 'OCRResult'>;
@@ -93,6 +94,7 @@ export const OCRResultScreen = () => {
     };
     await StorageService.saveDocument(updatedDoc);
     setDocument(updatedDoc);
+    ReminderService.scheduleExpiryReminders().catch(() => {});
     Alert.alert('Saved', 'Your scan has been saved as the original.', [
       { text: 'OK', onPress: () => navigation.navigate('MainTabs' as never) },
     ]);
