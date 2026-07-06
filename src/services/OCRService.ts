@@ -33,12 +33,40 @@ const recognizeWithTesseract = async (imageUri: string): Promise<string> => {
   return await NativeModules.TesseractOcr.recognize(path, 'ell');
 };
 
+// Full Greek and Coptic (U+0370–U+03FF) + Greek Extended (U+1F00–U+1FFF).
 /** Fraction of alphabetic characters that are Greek. */
 const greekRatio = (text: string): number => {
-  const letters = text.match(/[A-Za-zͰ-Ͽἀ-῿]/g);
-  if (!letters || letters.length === 0) return 0;
-  const greek = letters.filter(c => /[Ͱ-Ͽἀ-῿]/.test(c)).length;
-  return greek / letters.length;
+  const greek = (text.match(/[Ͱ-Ͽἀ-῿]/g) || []).length;
+  const latin = (text.match(/[a-z]/gi) || []).length;
+  const total = greek + latin;
+  return total === 0 ? 0 : greek / total;
+};
+
+// Accent-stripped common words used to tell which engine read real text.
+const normalize = (text: string): string =>
+  text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '');
+
+const GREEK_WORDS = [
+  'και', 'να', 'το', 'της', 'του', 'με', 'σε', 'για', 'απο', 'στο', 'στη',
+  'ειναι', 'συνολο', 'αποδειξη', 'τιμολογιο', 'αφμ', 'ευρω', 'φπα',
+  'ημερομηνια', 'αριθμος', 'ονομα', 'διευθυνση', 'ελλας', 'ελληνικη',
+  'νοσοκομειο', 'ασθενης', 'ποσο', 'πληρωμη', 'στοιχεια', 'κωδικος',
+].map(normalize);
+
+const ENGLISH_WORDS = [
+  'the', 'and', 'of', 'to', 'in', 'is', 'for', 'total', 'date', 'amount',
+  'number', 'invoice', 'receipt', 'name', 'address', 'account', 'payment',
+  'customer', 'quantity', 'price', 'balance', 'you', 'your', 'this', 'from',
+  'with', 'card', 'cash', 'tax', 'phone',
+];
+
+const countWordHits = (text: string, words: string[]): number => {
+  const tokens = normalize(text).split(/[^a-zͰ-Ͽἀ-῿]+/);
+  const set = new Set(tokens.filter(Boolean));
+  return words.reduce((sum, w) => sum + (set.has(w) ? 1 : 0), 0);
 };
 
 const recognizeText = async (imageUri: string): Promise<string> => {
@@ -56,17 +84,29 @@ const recognizeText = async (imageUri: string): Promise<string> => {
     }
   }
 
-  // Auto: read with the Greek engine first; if the page is mostly
-  // non-Greek, trust the Latin engine's result instead.
+  // Auto: run both engines and keep whichever produced real words —
+  // the Greek (Tesseract) engine can only emit Greek glyphs, so a
+  // ratio check alone can't tell real Greek from wrong-script garbage.
+  let greekText = '';
+  let latinText = '';
   try {
-    const greekText = await recognizeWithTesseract(imageUri);
-    if (greekRatio(greekText) >= 0.15) {
-      return greekText;
-    }
-    return await recognizeWithMLKit(imageUri);
+    [greekText, latinText] = await Promise.all([
+      recognizeWithTesseract(imageUri),
+      recognizeWithMLKit(imageUri),
+    ]);
   } catch {
-    return await recognizeWithMLKit(imageUri);
+    // Tesseract failed — fall back to whatever ML Kit gives.
+    return latinText || (await recognizeWithMLKit(imageUri));
   }
+
+  const gHits = countWordHits(greekText, GREEK_WORDS);
+  const lHits = countWordHits(latinText, ENGLISH_WORDS);
+
+  if (gHits > lHits) return greekText;
+  if (lHits > gHits) return latinText;
+  // Tie (short doc / no common words): trust the Greek result only if it
+  // is genuinely Greek-heavy, otherwise the Latin engine's reading.
+  return greekRatio(greekText) >= 0.3 ? greekText : latinText;
 };
 
 const processPage = async (
