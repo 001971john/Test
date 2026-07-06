@@ -56,6 +56,7 @@ export type RootStackParamList = {
   ImageEditor: { documentId: string; pageId: string };
   OCRResult: { documentId: string };
   Export: { documentId: string };
+  Signature: { documentId: string; pageId: string };
 };
 
 export type MainTabParamList = {

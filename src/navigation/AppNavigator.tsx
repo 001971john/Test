@@ -11,6 +11,7 @@ import { AssistantScreen } from '../screens/AssistantScreen';
 import { ImageEditorScreen } from '../screens/ImageEditorScreen';
 import { OCRResultScreen } from '../screens/OCRResultScreen';
 import { ExportScreen } from '../screens/ExportScreen';
+import { SignatureScreen } from '../screens/SignatureScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -157,6 +158,11 @@ export const AppNavigator = () => {
           name="Export"
           component={ExportScreen}
           options={{ title: 'Export Document' }}
+        />
+        <Stack.Screen
+          name="Signature"
+          component={SignatureScreen}
+          options={{ title: 'Add Signature' }}
         />
       </Stack.Navigator>
     </NavigationContainer>

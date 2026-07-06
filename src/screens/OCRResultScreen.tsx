@@ -427,6 +427,13 @@ export const OCRResultScreen = () => {
                   </Text>
                 </TouchableOpacity>
               </View>
+              <TouchableOpacity
+                style={styles.signButton}
+                onPress={() =>
+                  navigation.navigate('Signature', { documentId: document.id, pageId: page.id })
+                }>
+                <Text style={styles.signButtonText}>✍️ Sign</Text>
+              </TouchableOpacity>
             </View>
           ))}
           <TouchableOpacity style={styles.addPageTile} onPress={addPages} disabled={addingPages}>
@@ -613,6 +620,14 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   pageItem: { marginRight: 12, alignItems: 'center' },
+  signButton: {
+    marginTop: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: '#EEF2FF',
+  },
+  signButtonText: { fontSize: 11, fontWeight: '700', color: '#4F46E5' },
   pageControls: {
     flexDirection: 'row',
     justifyContent: 'space-between',

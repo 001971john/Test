@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
+import android.util.Base64
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -90,6 +91,71 @@ class ImageEnhanceModule(reactContext: ReactApplicationContext) :
         promise.resolve(dest.absolutePath)
       } catch (e: Exception) {
         promise.reject("EENHANCE", e.message, e)
+      }
+    }
+  }
+
+  /**
+   * Stamps a signature (base64 PNG, transparent background) onto a page
+   * image at a relative position/size, expressed as fractions (0..1) of
+   * the base image's width/height so the caller doesn't need to know
+   * pixel dimensions.
+   */
+  @ReactMethod
+  fun stampSignature(
+    basePath: String,
+    signatureBase64: String,
+    xPct: Double,
+    yPct: Double,
+    widthPct: Double,
+    destPath: String,
+    promise: Promise,
+  ) {
+    executor.execute {
+      try {
+        val base = File(basePath.removePrefix("file://"))
+        if (!base.exists()) {
+          promise.reject("ENOENT", "Image not found: $basePath")
+          return@execute
+        }
+        val baseBitmap = BitmapFactory.decodeFile(base.absolutePath)
+          ?: run {
+            promise.reject("EDECODE", "Could not decode base image")
+            return@execute
+          }
+
+        val cleanBase64 = signatureBase64.substringAfter("base64,", signatureBase64)
+        val sigBytes = Base64.decode(cleanBase64, Base64.DEFAULT)
+        val sigBitmap = BitmapFactory.decodeByteArray(sigBytes, 0, sigBytes.size)
+          ?: run {
+            promise.reject("EDECODE", "Could not decode signature image")
+            return@execute
+          }
+
+        val out = Bitmap.createBitmap(baseBitmap.width, baseBitmap.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(out)
+        canvas.drawBitmap(baseBitmap, 0f, 0f, null)
+
+        val targetWidth = (baseBitmap.width * widthPct).toFloat()
+        val scale = targetWidth / sigBitmap.width
+        val targetHeight = sigBitmap.height * scale
+        val left = (baseBitmap.width * xPct).toFloat()
+        val top = (baseBitmap.height * yPct).toFloat()
+        val destRect = android.graphics.RectF(left, top, left + targetWidth, top + targetHeight)
+        canvas.drawBitmap(sigBitmap, null, destRect, null)
+
+        baseBitmap.recycle()
+        sigBitmap.recycle()
+
+        val dest = File(destPath.removePrefix("file://"))
+        dest.parentFile?.mkdirs()
+        FileOutputStream(dest).use { stream ->
+          out.compress(Bitmap.CompressFormat.JPEG, 92, stream)
+        }
+        out.recycle()
+        promise.resolve(dest.absolutePath)
+      } catch (e: Exception) {
+        promise.reject("ESTAMP", e.message, e)
       }
     }
   }
