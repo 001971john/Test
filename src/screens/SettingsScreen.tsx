@@ -163,18 +163,10 @@ export const SettingsScreen = () => {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Text Recognition Language</Text>
         <TouchableOpacity
-          style={[styles.langOption, ocrLang === 'auto' && styles.langOptionActive]}
-          onPress={() => handleSetOcrLang('auto')}>
-          <Text style={[styles.langOptionText, ocrLang === 'auto' && styles.langOptionTextActive]}>
-            ✨  Auto-detect (recommended)
-          </Text>
-          {ocrLang === 'auto' && <Text style={styles.langCheck}>✓</Text>}
-        </TouchableOpacity>
-        <TouchableOpacity
           style={[styles.langOption, ocrLang === 'greek' && styles.langOptionActive]}
           onPress={() => handleSetOcrLang('greek')}>
           <Text style={[styles.langOptionText, ocrLang === 'greek' && styles.langOptionTextActive]}>
-            🇬🇷  Ελληνικά only
+            🇬🇷  Ελληνικά (recommended)
           </Text>
           {ocrLang === 'greek' && <Text style={styles.langCheck}>✓</Text>}
         </TouchableOpacity>
@@ -186,10 +178,18 @@ export const SettingsScreen = () => {
           </Text>
           {ocrLang === 'latin' && <Text style={styles.langCheck}>✓</Text>}
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.langOption, ocrLang === 'auto' && styles.langOptionActive]}
+          onPress={() => handleSetOcrLang('auto')}>
+          <Text style={[styles.langOptionText, ocrLang === 'auto' && styles.langOptionTextActive]}>
+            ✨  Auto-detect (Greek or English)
+          </Text>
+          {ocrLang === 'auto' && <Text style={styles.langCheck}>✓</Text>}
+        </TouchableOpacity>
         <Text style={styles.storageNote}>
-          Auto reads each page with the Greek engine and switches to the Latin engine when the page
-          isn't Greek — no more mixed-alphabet text. Documents in other languages are always kept
-          exactly as scanned.
+          Greek mode uses the Greek engine so Greek documents read as clean Greek. Pick English for
+          Latin-only documents. Documents in other languages are always kept exactly as scanned —
+          use Translate on the document screen when you need Greek or English.
         </Text>
       </View>
 
