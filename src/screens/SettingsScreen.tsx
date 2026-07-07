@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LockService } from '../services/LockService';
 import { OCRService, OcrLanguage } from '../services/OCRService';
-import { LocalAIService } from '../services/LocalAIService';
+import { LocalAIService, AIModelId } from '../services/LocalAIService';
 import { BackupService, BackupFile } from '../services/BackupService';
 
 export const SettingsScreen = () => {
@@ -12,21 +12,80 @@ export const SettingsScreen = () => {
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [ocrLang, setOcrLang] = useState<OcrLanguage>('greek');
-  const [aiStatus, setAiStatus] = useState<'checking' | 'missing' | 'downloading' | 'ready'>('checking');
-  const [aiProgress, setAiProgress] = useState(0);
+  const [modelDownloaded, setModelDownloaded] = useState<Record<AIModelId, boolean>>({
+    standard: false,
+    accurate: false,
+  });
+  const [activeModel, setActiveModel] = useState<AIModelId>('standard');
+  const [downloadingModel, setDownloadingModel] = useState<AIModelId | null>(null);
+  const [modelProgress, setModelProgress] = useState(0);
   const [backups, setBackups] = useState<BackupFile[]>([]);
   const [backupBusy, setBackupBusy] = useState(false);
 
   const loadBackups = () => BackupService.listBackups().then(setBackups);
 
+  const loadModelStatuses = async () => {
+    const { statuses, activeId } = await LocalAIService.getModelStatuses();
+    setModelDownloaded({
+      standard: statuses.find(s => s.id === 'standard')?.downloaded ?? false,
+      accurate: statuses.find(s => s.id === 'accurate')?.downloaded ?? false,
+    });
+    setActiveModel(activeId);
+  };
+
   useEffect(() => {
     LockService.isLockEnabled().then(setLockEnabled);
     OCRService.getOcrLanguage().then(setOcrLang);
-    LocalAIService.isModelDownloaded().then(ready =>
-      setAiStatus(ready ? 'ready' : 'missing'),
-    );
+    loadModelStatuses();
     loadBackups();
   }, []);
+
+  const handleDownloadModel = (id: AIModelId) => {
+    const model = LocalAIService.models.find(m => m.id === id)!;
+    Alert.alert(
+      `Download ${model.label} Model`,
+      `About ${model.sizeLabel}. ${model.note}. Wi-Fi recommended — you can lock the screen or use other apps, the download continues in the notification bar. Everything runs on your phone; no document leaves your device.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Download',
+          onPress: async () => {
+            setDownloadingModel(id);
+            setModelProgress(0);
+            try {
+              await LocalAIService.downloadModel(id, setModelProgress);
+              await loadModelStatuses();
+              Alert.alert('Ready!', `The ${model.label} model is installed.`);
+            } catch (e: any) {
+              Alert.alert('Download Failed', e?.message ?? 'Please check your connection and try again.');
+            } finally {
+              setDownloadingModel(null);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleDeleteModel = (id: AIModelId) => {
+    const model = LocalAIService.models.find(m => m.id === id)!;
+    Alert.alert('Delete Model', `Delete the ${model.label} model? This frees about ${model.sizeLabel}.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          await LocalAIService.deleteModel(id);
+          await loadModelStatuses();
+        },
+      },
+    ]);
+  };
+
+  const handleUseModel = async (id: AIModelId) => {
+    await LocalAIService.setPreferredModelId(id);
+    setActiveModel(id);
+  };
 
   const handleCreateBackup = async () => {
     setBackupBusy(true);
@@ -71,45 +130,6 @@ export const SettingsScreen = () => {
         },
       ],
     );
-  };
-
-  const handleDownloadModel = () => {
-    Alert.alert(
-      'Download AI Model',
-      'The Smart Fill AI model is about 1.1 GB. Wi-Fi is strongly recommended. You can lock the screen or use other apps — the download continues in the notification bar. After downloading, all AI runs on your phone — no document ever leaves your device.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Download',
-          onPress: async () => {
-            setAiStatus('downloading');
-            setAiProgress(0);
-            try {
-              await LocalAIService.downloadModel(setAiProgress);
-              setAiStatus('ready');
-              Alert.alert('Ready!', 'The AI model is installed. Use ✨ Smart Fill on any scanned document.');
-            } catch (e: any) {
-              setAiStatus('missing');
-              Alert.alert('Download Failed', e?.message ?? 'Please check your connection and try again.');
-            }
-          },
-        },
-      ],
-    );
-  };
-
-  const handleDeleteModel = () => {
-    Alert.alert('Delete AI Model', 'This frees about 1.1 GB. You can download it again anytime.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          await LocalAIService.deleteModel();
-          setAiStatus('missing');
-        },
-      },
-    ]);
   };
 
   const handleSetOcrLang = async (lang: OcrLanguage) => {
@@ -246,28 +266,53 @@ export const SettingsScreen = () => {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Local AI (Offline)</Text>
-        <View style={styles.row}>
-          <Text style={styles.label}>AI Model</Text>
-          <Text style={[styles.value, aiStatus === 'ready' && styles.valueActive]}>
-            {aiStatus === 'checking' && 'Checking…'}
-            {aiStatus === 'missing' && 'Not downloaded'}
-            {aiStatus === 'downloading' && `Downloading… ${aiProgress}%`}
-            {aiStatus === 'ready' && '✅ Ready · 1.1 GB'}
-          </Text>
-        </View>
-        {aiStatus === 'missing' && (
-          <TouchableOpacity style={styles.primaryButton} onPress={handleDownloadModel}>
-            <Text style={styles.primaryButtonText}>⬇️ Download AI Model (1.1 GB)</Text>
-          </TouchableOpacity>
-        )}
-        {aiStatus === 'ready' && (
-          <TouchableOpacity style={styles.linkButton} onPress={handleDeleteModel}>
-            <Text style={styles.linkButtonText}>Delete AI Model</Text>
-          </TouchableOpacity>
-        )}
+        {LocalAIService.models.map(model => {
+          const downloaded = modelDownloaded[model.id];
+          const isDownloading = downloadingModel === model.id;
+          const isActive = activeModel === model.id;
+          const bothDownloaded = modelDownloaded.standard && modelDownloaded.accurate;
+          return (
+            <View key={model.id} style={styles.modelCard}>
+              <View style={styles.modelHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modelName}>
+                    {model.label} · {model.sizeLabel}
+                    {downloaded && isActive && bothDownloaded ? '  ✓ In use' : ''}
+                  </Text>
+                  <Text style={styles.modelNote}>{model.note}</Text>
+                </View>
+                {downloaded && (
+                  <Text style={styles.modelReady}>✅</Text>
+                )}
+              </View>
+              {isDownloading ? (
+                <Text style={styles.modelDownloading}>Downloading… {modelProgress}%</Text>
+              ) : downloaded ? (
+                <View style={styles.modelActions}>
+                  {bothDownloaded && !isActive && (
+                    <TouchableOpacity onPress={() => handleUseModel(model.id)}>
+                      <Text style={styles.modelUse}>Use this model</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity onPress={() => handleDeleteModel(model.id)}>
+                    <Text style={styles.modelDelete}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.modelDownloadButton}
+                  onPress={() => handleDownloadModel(model.id)}
+                  disabled={downloadingModel !== null}>
+                  <Text style={styles.modelDownloadText}>⬇️ Download ({model.sizeLabel})</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          );
+        })}
         <Text style={styles.storageNote}>
-          Powers ✨ Smart Fill and the Assistant. Runs 100% on your phone — your documents never
-          leave the device.
+          Powers ✨ Smart Fill, the Assistant, and Translation. Runs 100% on your phone — your
+          documents never leave the device. The High-accuracy model gives noticeably better
+          translations if your phone has enough memory.
         </Text>
       </View>
 
@@ -452,6 +497,30 @@ const styles = StyleSheet.create({
     marginTop: 12,
     color: '#111827',
   },
+  modelCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E7EAF0',
+  },
+  modelHeader: { flexDirection: 'row', alignItems: 'flex-start' },
+  modelName: { fontSize: 15, fontWeight: '700', color: '#111827' },
+  modelNote: { fontSize: 12.5, color: '#6B7280', marginTop: 2 },
+  modelReady: { fontSize: 16, marginLeft: 8 },
+  modelDownloading: { fontSize: 14, fontWeight: '600', color: '#4F46E5', marginTop: 10 },
+  modelActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 18, marginTop: 10 },
+  modelUse: { fontSize: 14, fontWeight: '700', color: '#4F46E5' },
+  modelDelete: { fontSize: 14, fontWeight: '700', color: '#E11D48' },
+  modelDownloadButton: {
+    backgroundColor: '#4F46E5',
+    padding: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  modelDownloadText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
   backupRow: {
     flexDirection: 'row',
     alignItems: 'center',

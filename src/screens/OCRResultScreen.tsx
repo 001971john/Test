@@ -38,6 +38,7 @@ export const OCRResultScreen = () => {
   const [aiFilling, setAiFilling] = useState(false);
   const [addingPages, setAddingPages] = useState(false);
   const [translating, setTranslating] = useState(false);
+  const [translateProgress, setTranslateProgress] = useState<{ done: number; total: number } | null>(null);
   const [aiClassifying, setAiClassifying] = useState(false);
   const [detectedLanguage, setDetectedLanguage] = useState<DetectedLanguage | null>(null);
 
@@ -192,13 +193,16 @@ export const OCRResultScreen = () => {
     if (!(await LocalAIService.isModelDownloaded())) {
       Alert.alert(
         'AI Model Needed',
-        'Translation runs entirely on your phone using the AI model. Download it once from Settings → Local AI (1.1 GB).',
+        'Translation runs entirely on your phone using the AI model. Download it once from Settings → Local AI.',
       );
       return;
     }
     setTranslating(true);
+    setTranslateProgress(null);
     try {
-      const text = await LocalAIService.translate(allText, target);
+      const text = await LocalAIService.translate(allText, target, (done, total) => {
+        if (total > 1) setTranslateProgress({ done, total });
+      });
       const updatedDoc: ScannedDocument = {
         ...document,
         translation: { to: target, text },
@@ -210,6 +214,7 @@ export const OCRResultScreen = () => {
       Alert.alert('Translation Error', error?.message ?? 'Could not translate. Try again.');
     } finally {
       setTranslating(false);
+      setTranslateProgress(null);
     }
   };
 
@@ -551,7 +556,11 @@ export const OCRResultScreen = () => {
           {translating ? (
             <View style={styles.aiFillingRow}>
               <ActivityIndicator color="#4F46E5" size="small" />
-              <Text style={styles.translatingText}>  Translating on your phone…</Text>
+              <Text style={styles.translatingText}>
+                {translateProgress
+                  ? `  Translating… part ${translateProgress.done + 1} of ${translateProgress.total}`
+                  : '  Translating on your phone…'}
+              </Text>
             </View>
           ) : (
             <View style={styles.langChipsRow}>

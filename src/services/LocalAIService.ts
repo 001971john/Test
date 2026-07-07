@@ -1,12 +1,57 @@
 import { initLlama, LlamaContext } from 'llama.rn';
 import ReactNativeBlobUtil from 'react-native-blob-util';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ExtractedIDData, DocumentType } from '../types';
 import { SupportedLanguage, SUPPORTED_LANGUAGES, LANGUAGE_LABELS } from '../utils/Languages';
 
-const MODEL_URL =
-  'https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf';
-const MODEL_FILENAME = 'qwen2.5-1.5b-instruct-q4_k_m.gguf';
-const MODEL_SIZE_BYTES = 1_120_000_000; // ~1.1 GB, for progress estimation
+export type AIModelId = 'standard' | 'accurate';
+
+export interface AIModelInfo {
+  id: AIModelId;
+  label: string;
+  url: string;
+  filename: string;
+  sizeBytes: number;
+  sizeLabel: string;
+  note: string;
+}
+
+export const AI_MODELS: AIModelInfo[] = [
+  {
+    id: 'standard',
+    label: 'Standard',
+    url: 'https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf',
+    filename: 'qwen2.5-1.5b-instruct-q4_k_m.gguf',
+    sizeBytes: 1_120_000_000,
+    sizeLabel: '1.1 GB',
+    note: 'Fast, works on most phones',
+  },
+  {
+    id: 'accurate',
+    label: 'High accuracy',
+    url: 'https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf',
+    filename: 'qwen2.5-3b-instruct-q4_k_m.gguf',
+    sizeBytes: 1_930_000_000,
+    sizeLabel: '1.9 GB',
+    note: 'More accurate; needs ~4 GB+ RAM',
+  },
+];
+
+const MODEL_PREF_KEY = '@docscanner/ai_model';
+
+const getModelById = (id: AIModelId): AIModelInfo =>
+  AI_MODELS.find(m => m.id === id) ?? AI_MODELS[0];
+
+const getPreferredModelId = async (): Promise<AIModelId> => {
+  const value = await AsyncStorage.getItem(MODEL_PREF_KEY);
+  return value === 'accurate' ? 'accurate' : 'standard';
+};
+
+const setPreferredModelId = async (id: AIModelId): Promise<void> => {
+  await AsyncStorage.setItem(MODEL_PREF_KEY, id);
+  // Force a reload of the context so the newly chosen model is used next call.
+  await releaseContext();
+};
 
 export class LocalAIError extends Error {
   code: 'MODEL_NOT_DOWNLOADED' | 'MODEL_LOAD_FAILED' | 'DOWNLOAD_FAILED' | 'EXTRACTION_FAILED';
@@ -17,43 +62,68 @@ export class LocalAIError extends Error {
 }
 
 const getModelDir = () => `${ReactNativeBlobUtil.fs.dirs.DocumentDir}/models`;
-const getModelPath = () => `${getModelDir()}/${MODEL_FILENAME}`;
+const getModelPath = (model: AIModelInfo) => `${getModelDir()}/${model.filename}`;
 
-const isModelDownloaded = async (): Promise<boolean> => {
-  const path = getModelPath();
+const isModelIdDownloaded = async (id: AIModelId): Promise<boolean> => {
+  const model = getModelById(id);
+  const path = getModelPath(model);
   const exists = await ReactNativeBlobUtil.fs.exists(path);
   if (!exists) return false;
   // Guard against partial downloads left behind by a crash.
   const stat = await ReactNativeBlobUtil.fs.stat(path);
-  return Number(stat.size) > MODEL_SIZE_BYTES * 0.95;
+  return Number(stat.size) > model.sizeBytes * 0.9;
 };
 
-const getTempDownloadPath = () =>
-  `${ReactNativeBlobUtil.fs.dirs.LegacyDownloadDir}/DocScanner-model.gguf.part`;
+/** Backward-compatible: true if ANY AI model is downloaded. */
+const isModelDownloaded = async (): Promise<boolean> => {
+  for (const model of AI_MODELS) {
+    if (await isModelIdDownloaded(model.id)) return true;
+  }
+  return false;
+};
+
+export interface ModelStatus {
+  id: AIModelId;
+  downloaded: boolean;
+}
+
+const getModelStatuses = async (): Promise<{ statuses: ModelStatus[]; activeId: AIModelId }> => {
+  const statuses: ModelStatus[] = [];
+  for (const model of AI_MODELS) {
+    statuses.push({ id: model.id, downloaded: await isModelIdDownloaded(model.id) });
+  }
+  const activeId = await getPreferredModelId();
+  return { statuses, activeId };
+};
+
+const getTempDownloadPath = (id: AIModelId) =>
+  `${ReactNativeBlobUtil.fs.dirs.LegacyDownloadDir}/DocScanner-model-${id}.gguf.part`;
 
 /**
- * Downloads the model via Android's system Download Manager so the
+ * Downloads a model via Android's system Download Manager so the
  * transfer survives screen-off, app switching, and process death.
  * The OS shows a progress notification; we also poll the growing file
  * to drive the in-app percentage.
  */
 const downloadModel = async (
+  id: AIModelId,
   onProgress: (percent: number) => void,
 ): Promise<void> => {
+  const model = getModelById(id);
   const dir = getModelDir();
   const dirExists = await ReactNativeBlobUtil.fs.isDir(dir);
   if (!dirExists) {
     await ReactNativeBlobUtil.fs.mkdir(dir);
   }
-  const tempPath = getTempDownloadPath();
+  const tempPath = getTempDownloadPath(id);
 
   // If a previous attempt already downloaded the file fully (e.g. only
-  // the finalize step failed), reuse it instead of downloading 1.1 GB again.
+  // the finalize step failed), reuse it instead of downloading again.
   let haveCompleteTemp = false;
   try {
     if (await ReactNativeBlobUtil.fs.exists(tempPath)) {
       const existing = await ReactNativeBlobUtil.fs.stat(tempPath);
-      if (Number(existing.size) >= MODEL_SIZE_BYTES * 0.95) {
+      if (Number(existing.size) >= model.sizeBytes * 0.9) {
         haveCompleteTemp = true;
       } else {
         await ReactNativeBlobUtil.fs.unlink(tempPath);
@@ -69,7 +139,7 @@ const downloadModel = async (
       if (exists) {
         const stat = await ReactNativeBlobUtil.fs.stat(tempPath);
         onProgress(
-          Math.min(98, Math.round((Number(stat.size) / MODEL_SIZE_BYTES) * 100)),
+          Math.min(98, Math.round((Number(stat.size) / model.sizeBytes) * 100)),
         );
       }
     } catch {}
@@ -82,17 +152,17 @@ const downloadModel = async (
         addAndroidDownloads: {
           useDownloadManager: true,
           notification: true,
-          title: 'DocScanner AI model',
-          description: 'Downloading the offline AI model (~1.1 GB)…',
+          title: `DocScanner AI model (${model.label})`,
+          description: `Downloading the offline AI model (~${model.sizeLabel})…`,
           mime: 'application/octet-stream',
           mediaScannable: false,
           path: tempPath,
         },
-      }).fetch('GET', MODEL_URL);
+      }).fetch('GET', model.url);
     }
 
     const stat = await ReactNativeBlobUtil.fs.stat(tempPath);
-    if (Number(stat.size) < MODEL_SIZE_BYTES * 0.95) {
+    if (Number(stat.size) < model.sizeBytes * 0.9) {
       throw new Error('Downloaded file is incomplete');
     }
     downloadSucceeded = true;
@@ -101,7 +171,7 @@ const downloadModel = async (
     // across storage boundaries on many devices ("mv failed for unknown
     // reasons"), so copy and delete instead.
     onProgress(99);
-    const finalPath = getModelPath();
+    const finalPath = getModelPath(model);
     try {
       await ReactNativeBlobUtil.fs.unlink(finalPath);
     } catch {}
@@ -111,7 +181,7 @@ const downloadModel = async (
       await ReactNativeBlobUtil.fs.cp(tempPath, finalPath);
     }
 
-    const ok = await isModelDownloaded();
+    const ok = await isModelIdDownloaded(id);
     if (!ok) {
       throw new Error('Model file failed verification after download');
     }
@@ -121,7 +191,7 @@ const downloadModel = async (
     onProgress(100);
   } catch (e: any) {
     // Keep a fully-downloaded temp file so the next attempt can skip
-    // the 1.1 GB download and only redo the finalize step.
+    // the download and only redo the finalize step.
     if (!downloadSucceeded) {
       try {
         await ReactNativeBlobUtil.fs.unlink(tempPath);
@@ -133,23 +203,35 @@ const downloadModel = async (
   }
 };
 
-const deleteModel = async (): Promise<void> => {
+const deleteModel = async (id: AIModelId): Promise<void> => {
   try {
-    await ReactNativeBlobUtil.fs.unlink(getModelPath());
+    await ReactNativeBlobUtil.fs.unlink(getModelPath(getModelById(id)));
   } catch {}
+  await releaseContext();
 };
 
 let activeContext: LlamaContext | null = null;
 
+/** Resolves which downloaded model to load: the preferred one, else any. */
+const resolveActiveModel = async (): Promise<AIModelInfo | null> => {
+  const preferred = await getPreferredModelId();
+  if (await isModelIdDownloaded(preferred)) return getModelById(preferred);
+  for (const model of AI_MODELS) {
+    if (await isModelIdDownloaded(model.id)) return model;
+  }
+  return null;
+};
+
 const getContext = async (): Promise<LlamaContext> => {
   if (activeContext) return activeContext;
-  if (!(await isModelDownloaded())) {
+  const model = await resolveActiveModel();
+  if (!model) {
     throw new LocalAIError('MODEL_NOT_DOWNLOADED', 'The AI model has not been downloaded yet.');
   }
   try {
     activeContext = await initLlama({
-      model: getModelPath(),
-      n_ctx: 2048,
+      model: getModelPath(model),
+      n_ctx: 4096,
       use_mlock: false,
     });
     return activeContext;
@@ -374,30 +456,72 @@ const chat = async (
   }
 };
 
+// Packs OCR text into chunks that fit comfortably in the model's context,
+// splitting only on line boundaries so no line is ever cut in half.
+const chunkText = (text: string, maxChars = 1400): string[] => {
+  const lines = text.split(/\r?\n/);
+  const chunks: string[] = [];
+  let current = '';
+  for (const line of lines) {
+    // A single very long line still goes out whole.
+    if (line.length >= maxChars) {
+      if (current) {
+        chunks.push(current);
+        current = '';
+      }
+      chunks.push(line);
+      continue;
+    }
+    if (current.length + line.length + 1 > maxChars) {
+      chunks.push(current);
+      current = line;
+    } else {
+      current = current ? `${current}\n${line}` : line;
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks.length > 0 ? chunks : [text];
+};
+
 /**
- * Translates document text into any of the supported languages,
- * fully on-device. The original document is never modified — this
- * returns a separate text.
+ * Translates document text into any of the supported languages, fully
+ * on-device. Long documents are translated in complete chunks so no
+ * line is ever dropped. The original document is never modified.
  */
-const translate = async (text: string, target: SupportedLanguage): Promise<string> => {
+const translate = async (
+  text: string,
+  target: SupportedLanguage,
+  onProgress?: (done: number, total: number) => void,
+): Promise<string> => {
   const context = await getContext();
   try {
     const targetName = LANGUAGE_LABELS[target];
-    const result = await context.completion({
-      messages: [
-        {
-          role: 'system',
-          content:
-            `You are a professional translator. Translate the user's document text into ${targetName}. ` +
-            'The source may be any language and may contain OCR errors — fix obvious ones. ' +
-            'Preserve the line structure and numbers exactly. Respond with ONLY the translation, no explanations.',
-        },
-        { role: 'user', content: text.slice(0, 3500) },
-      ],
-      n_predict: 1024,
-      temperature: 0,
-    });
-    const out = result.text.trim();
+    const chunks = chunkText(text.trim());
+    const systemPrompt =
+      `You are a professional translator. Translate the text into ${targetName}. ` +
+      'Rules: translate EVERY line completely; never omit, summarize, merge, or add lines; ' +
+      'keep the same line breaks and the same number of lines; keep all numbers, names, dates, ' +
+      'and codes exactly; fix only obvious OCR typos. Output ONLY the translation, nothing else.';
+
+    const translatedChunks: string[] = [];
+    for (let i = 0; i < chunks.length; i++) {
+      onProgress?.(i, chunks.length);
+      const chunk = chunks[i];
+      // Give the output room to be a bit longer than the input, within context.
+      const nPredict = Math.min(2048, Math.max(256, Math.ceil(chunk.length / 2) + 256));
+      const result = await context.completion({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: chunk },
+        ],
+        n_predict: nPredict,
+        temperature: 0,
+      });
+      translatedChunks.push(result.text.trim());
+    }
+    onProgress?.(chunks.length, chunks.length);
+
+    const out = translatedChunks.join('\n').trim();
     if (!out) {
       throw new Error('Empty translation');
     }
@@ -482,6 +606,10 @@ const suggestTitle = async (ocrText: string): Promise<string> => {
 
 export const LocalAIService = {
   isModelDownloaded,
+  isModelIdDownloaded,
+  getModelStatuses,
+  getPreferredModelId,
+  setPreferredModelId,
   downloadModel,
   deleteModel,
   extractIDData,
@@ -491,5 +619,5 @@ export const LocalAIService = {
   detectLanguage,
   chat,
   releaseContext,
-  MODEL_SIZE_GB: 1.1,
+  models: AI_MODELS,
 };
