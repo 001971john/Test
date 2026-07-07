@@ -231,7 +231,11 @@ const getContext = async (): Promise<LlamaContext> => {
   try {
     activeContext = await initLlama({
       model: getModelPath(model),
-      n_ctx: 4096,
+      // 2048 is the memory-safe window proven across every prior release.
+      // Larger windows caused native out-of-memory crashes during long,
+      // multi-chunk translations. Chunking keeps documents complete
+      // without needing a bigger context.
+      n_ctx: 2048,
       use_mlock: false,
     });
     return activeContext;
@@ -458,7 +462,9 @@ const chat = async (
 
 // Packs OCR text into chunks that fit comfortably in the model's context,
 // splitting only on line boundaries so no line is ever cut in half.
-const chunkText = (text: string, maxChars = 1400): string[] => {
+// Kept small (Greek is ~1 token/char) so each chunk's input + translation
+// stays well within the 2048 window — no context overflow, bounded memory.
+const chunkText = (text: string, maxChars = 600): string[] => {
   const lines = text.split(/\r?\n/);
   const chunks: string[] = [];
   let current = '';
@@ -499,6 +505,7 @@ const translate = async (
     const chunks = chunkText(text.trim());
     const systemPrompt =
       `You are a professional translator. Translate the text into ${targetName}. ` +
+      'Translate faithfully and literally; do not paraphrase. ' +
       'Rules: translate EVERY line completely; never omit, summarize, merge, or add lines; ' +
       'keep the same line breaks and the same number of lines; keep all numbers, names, dates, ' +
       'and codes exactly; fix only obvious OCR typos. Output ONLY the translation, nothing else.';
@@ -507,8 +514,9 @@ const translate = async (
     for (let i = 0; i < chunks.length; i++) {
       onProgress?.(i, chunks.length);
       const chunk = chunks[i];
-      // Give the output room to be a bit longer than the input, within context.
-      const nPredict = Math.min(2048, Math.max(256, Math.ceil(chunk.length / 2) + 256));
+      // Cap output so chunk-input + output stay within the 2048 window
+      // (prevents context overflow and keeps peak memory bounded).
+      const nPredict = Math.min(900, Math.max(256, chunk.length + 128));
       const result = await context.completion({
         messages: [
           { role: 'system', content: systemPrompt },
