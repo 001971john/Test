@@ -1,6 +1,7 @@
 import { initLlama, LlamaContext } from 'llama.rn';
 import ReactNativeBlobUtil from 'react-native-blob-util';
 import { ExtractedIDData, DocumentType } from '../types';
+import { SupportedLanguage, SUPPORTED_LANGUAGES, LANGUAGE_LABELS } from '../utils/Languages';
 
 const MODEL_URL =
   'https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf';
@@ -374,13 +375,14 @@ const chat = async (
 };
 
 /**
- * Translates document text to Greek or English, fully on-device.
- * The original document is never modified — this returns a separate text.
+ * Translates document text into any of the supported languages,
+ * fully on-device. The original document is never modified — this
+ * returns a separate text.
  */
-const translate = async (text: string, target: 'greek' | 'english'): Promise<string> => {
+const translate = async (text: string, target: SupportedLanguage): Promise<string> => {
   const context = await getContext();
   try {
-    const targetName = target === 'greek' ? 'Greek (Ελληνικά)' : 'English';
+    const targetName = LANGUAGE_LABELS[target];
     const result = await context.completion({
       messages: [
         {
@@ -403,6 +405,54 @@ const translate = async (text: string, target: 'greek' | 'english'): Promise<str
   } catch (e: any) {
     if (e instanceof LocalAIError) throw e;
     throw new LocalAIError('EXTRACTION_FAILED', e?.message ?? 'Translation failed.');
+  } finally {
+    await releaseContext();
+  }
+};
+
+export interface DetectedLanguage {
+  language: SupportedLanguage | 'other';
+  label: string;
+}
+
+/**
+ * Identifies the primary language of a document's OCR text. Fully
+ * on-device — purely informational, used to show a "Detected: X"
+ * chip and to suggest a sensible translation target.
+ */
+const detectLanguage = async (ocrText: string): Promise<DetectedLanguage> => {
+  const context = await getContext();
+  try {
+    const result = await context.completion({
+      messages: [
+        {
+          role: 'system',
+          content:
+            'Identify the primary language of the given text (it may contain OCR errors). ' +
+            `Respond with ONLY JSON: {"language": "<one of ${SUPPORTED_LANGUAGES.join(
+              ', ',
+            )}, other>", "label": "<the language's name in English>"}. ` +
+            'Use "other" only if the text is not Greek, English, German, Italian, or French — ' +
+            'in that case still give the real language name as the label (e.g. "Russian").',
+        },
+        { role: 'user', content: ocrText.slice(0, 1500) },
+      ],
+      n_predict: 48,
+      temperature: 0,
+    });
+    const raw = parseJSONLoose(result.text);
+    const language: SupportedLanguage | 'other' = SUPPORTED_LANGUAGES.includes(
+      raw.language as SupportedLanguage,
+    )
+      ? (raw.language as SupportedLanguage)
+      : 'other';
+    const label =
+      typeof raw.label === 'string' && raw.label.trim()
+        ? raw.label.trim()
+        : language !== 'other'
+        ? LANGUAGE_LABELS[language]
+        : 'Unknown';
+    return { language, label };
   } finally {
     await releaseContext();
   }
@@ -438,6 +488,7 @@ export const LocalAIService = {
   suggestTitle,
   classifyDocument,
   translate,
+  detectLanguage,
   chat,
   releaseContext,
   MODEL_SIZE_GB: 1.1,

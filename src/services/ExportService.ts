@@ -4,6 +4,7 @@ import ReactNativeBlobUtil from 'react-native-blob-util';
 import Share from 'react-native-share';
 import { Buffer } from 'buffer';
 import { ScannedDocument, ExtractedIDData, ID_TYPES } from '../types';
+import { LANGUAGE_LABELS } from '../utils/Languages';
 import { StorageService } from './StorageService';
 
 // Shared field order/labels for the ID information form in every export.
@@ -172,7 +173,7 @@ const generatePDFHTML = async (doc: ScannedDocument, options?: PDFOptions): Prom
   }
 
   if (doc.translation) {
-    const langLabel = doc.translation.to === 'greek' ? 'ΕΛΛΗΝΙΚΑ' : 'ENGLISH';
+    const langLabel = LANGUAGE_LABELS[doc.translation.to].toUpperCase();
     html += `
       <div style="page-break-before: always;">
         <h2 style="color:#3730A3;">Translation (${langLabel})</h2>
@@ -323,7 +324,7 @@ const exportToDOCX = async (doc: ScannedDocument): Promise<ExportResult> => {
 
   // ---- Translation ----
   if (doc.translation) {
-    const langLabel = doc.translation.to === 'greek' ? 'Ελληνικά' : 'English';
+    const langLabel = LANGUAGE_LABELS[doc.translation.to];
     children.push(
       new Paragraph({
         text: `Translation (${langLabel})`,

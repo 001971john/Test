@@ -1,3 +1,5 @@
+import { SupportedLanguage } from '../utils/Languages';
+
 export type DocumentType =
   | 'general'
   | 'id_card'
@@ -48,7 +50,7 @@ export interface ScannedDocument {
   extractedData?: ExtractedIDData;
   type: DocumentType;
   /** On-demand AI translation of the document text. Original is never modified. */
-  translation?: { to: 'greek' | 'english'; text: string };
+  translation?: { to: SupportedLanguage; text: string };
 }
 
 export type RootStackParamList = {

@@ -19,9 +19,10 @@ import { StorageService } from '../services/StorageService';
 import { ScannerService } from '../services/ScannerService';
 import { OCRService } from '../services/OCRService';
 import { ExportService } from '../services/ExportService';
-import { LocalAIService, LocalAIError } from '../services/LocalAIService';
+import { LocalAIService, LocalAIError, DetectedLanguage } from '../services/LocalAIService';
 import { ReminderService } from '../services/ReminderService';
 import { TYPE_META } from '../utils/DocClassifier';
+import { SUPPORTED_LANGUAGES, LANGUAGE_LABELS, LANGUAGE_FLAGS, SupportedLanguage } from '../utils/Languages';
 
 type ScreenRouteProp = RouteProp<RootStackParamList, 'OCRResult'>;
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -38,6 +39,7 @@ export const OCRResultScreen = () => {
   const [addingPages, setAddingPages] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [aiClassifying, setAiClassifying] = useState(false);
+  const [detectedLanguage, setDetectedLanguage] = useState<DetectedLanguage | null>(null);
 
   useEffect(() => {
     loadDocument();
@@ -51,8 +53,23 @@ export const OCRResultScreen = () => {
       setDocument(doc);
       setEditedData(doc.extractedData || null);
       refineCategoryWithAI(doc);
+      detectDocumentLanguage(doc);
     }
     setLoading(false);
+  };
+
+  // Non-blocking, best-effort: label the document with its detected
+  // source language when the on-device model is available.
+  const detectDocumentLanguage = async (doc: ScannedDocument) => {
+    const allText = doc.pages.map(p => p.ocrText).join('\n').trim();
+    if (!allText) return;
+    if (!(await LocalAIService.isModelDownloaded())) return;
+    try {
+      const result = await LocalAIService.detectLanguage(allText);
+      setDetectedLanguage(result);
+    } catch {
+      // Detection is a bonus label — fail silently.
+    }
   };
 
   // Non-blocking: let the on-device AI refine the category and title
@@ -165,7 +182,7 @@ export const OCRResultScreen = () => {
     setEditedData({ ...editedData, [field]: value });
   };
 
-  const runTranslate = async (target: 'greek' | 'english') => {
+  const runTranslate = async (target: SupportedLanguage) => {
     if (!document) return;
     const allText = document.pages.map(p => p.ocrText).join('\n').trim();
     if (!allText) {
@@ -194,18 +211,6 @@ export const OCRResultScreen = () => {
     } finally {
       setTranslating(false);
     }
-  };
-
-  const handleTranslate = () => {
-    Alert.alert(
-      '🌐 Translate Document',
-      'The original scan stays untouched — the translation is added alongside it.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Σε Ελληνικά 🇬🇷', onPress: () => runTranslate('greek') },
-        { text: 'To English 🇬🇧', onPress: () => runTranslate('english') },
-      ],
-    );
   };
 
   const savePages = async (pages: ScannedDocument['pages']) => {
@@ -381,6 +386,14 @@ export const OCRResultScreen = () => {
         {aiClassifying && (
           <Text style={styles.aiClassifyingText}>  🏷 AI is categorizing…</Text>
         )}
+        {detectedLanguage && (
+          <View style={styles.langBadge}>
+            <Text style={styles.langBadgeText}>
+              🌍 {detectedLanguage.language !== 'other' ? LANGUAGE_FLAGS[detectedLanguage.language] : ''}{' '}
+              {detectedLanguage.label}
+            </Text>
+          </View>
+        )}
       </View>
 
       {document.pages.length > 0 && (
@@ -487,7 +500,7 @@ export const OCRResultScreen = () => {
       {document.translation && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>
-            🌐 Translation ({document.translation.to === 'greek' ? 'Ελληνικά' : 'English'})
+            🌐 Translation ({LANGUAGE_LABELS[document.translation.to]})
           </Text>
           <Text style={styles.ocrText}>{document.translation.text}</Text>
         </View>
@@ -533,23 +546,28 @@ export const OCRResultScreen = () => {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.actionButton, styles.secondaryButton]}
-          onPress={handleTranslate}
-          disabled={translating}>
+        <View style={styles.translateBlock}>
+          <Text style={styles.translateLabel}>🌐 Translate to</Text>
           {translating ? (
             <View style={styles.aiFillingRow}>
               <ActivityIndicator color="#4F46E5" size="small" />
-              <Text style={[styles.actionButtonText, styles.secondaryButtonText]}>
-                {'  '}Translating on your phone…
-              </Text>
+              <Text style={styles.translatingText}>  Translating on your phone…</Text>
             </View>
           ) : (
-            <Text style={[styles.actionButtonText, styles.secondaryButtonText]}>
-              🌐  Translate (Greek / English)
-            </Text>
+            <View style={styles.langChipsRow}>
+              {SUPPORTED_LANGUAGES.map(lang => (
+                <TouchableOpacity
+                  key={lang}
+                  style={styles.langChip}
+                  onPress={() => runTranslate(lang)}>
+                  <Text style={styles.langChipText}>
+                    {LANGUAGE_FLAGS[lang]} {LANGUAGE_LABELS[lang]}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           )}
-        </TouchableOpacity>
+        </View>
 
         <TouchableOpacity
           style={[styles.actionButton, styles.secondaryButton]}
@@ -599,6 +617,14 @@ const styles = StyleSheet.create({
   },
   docTypeBadgeText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
   aiClassifyingText: { fontSize: 12, color: '#6B7280', fontStyle: 'italic' },
+  langBadge: {
+    marginLeft: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    backgroundColor: '#EEF2FF',
+  },
+  langBadgeText: { fontSize: 12, fontWeight: '700', color: '#4F46E5' },
   docType: {
     fontSize: 14,
     color: '#4F46E5',
@@ -743,6 +769,35 @@ const styles = StyleSheet.create({
   wordButton: {
     backgroundColor: '#2563EB',
   },
+  translateBlock: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#4F46E5',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+  },
+  translateLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#4F46E5',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  translatingText: { fontSize: 15, fontWeight: '600', color: '#4F46E5' },
+  langChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
+  },
+  langChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: '#EEF2FF',
+  },
+  langChipText: { fontSize: 13, fontWeight: '600', color: '#3730A3' },
   deleteButton: {
     backgroundColor: '#FFFFFF',
     borderWidth: 2,
